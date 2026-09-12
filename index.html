@@ -1,0 +1,1406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- viewport-fit=cover so the app fills the screen under the notch and the
+     home indicator once it is added to the Home Screen. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Dump everything in. Do one thing.">
+
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+
+<!-- The status bar picks up whichever theme is active. -->
+<meta name="theme-color" content="#f5f3ed" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1a17" media="(prefers-color-scheme: dark)">
+
+<!-- Both spellings: the first is the standard, the second is what older iOS
+     still reads. Without one of them iOS opens the app in a browser chrome. -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="One Thing">
+
+<style>
+  html,body{height:100%}
+  body{margin:0}
+  [hidden]{display:none!important}
+</style>
+<title>One Thing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,SOFT,WONK,wght@9..144,0..100,0..1,400..800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+</head>
+<body>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   PALETTE
+
+   Warm neutrals, both themes. The greys carry a little yellow-red
+   rather than blue, so nothing reads as tinted violet, and the dark
+   theme sits at a comfortable charcoal instead of near-black — dark
+   enough to rest your eyes on, light enough that no accent glows.
+   ═══════════════════════════════════════════════════════════════ */
+:root{
+  --ground:#f7f4ed;  --ground-2:#efebe1;
+  --surface:#fffdf8; --sunken:#f2eee5;  --raised:#fffefb;
+  --ink:#211f1a;     --ink-2:#57534a;   --ink-3:#8a847a;
+  --rule:#e2ddd1;    --rule-2:#c7c0b2;
+
+  --accent:#2c5578;   --accent-tint:#e6edf4;  --on-accent:#fffdf8;
+  --done:#3d7a4e;     --done-tint:#e4efe4;
+  --warn:#9a6512;     --warn-tint:#f7eddb;
+
+  --sh-1:0 1px 1px rgba(52,44,30,.05);
+  --sh-2:0 1px 2px rgba(52,44,30,.06),0 6px 14px rgba(52,44,30,.06);
+  --sh-3:0 8px 22px rgba(52,44,30,.12),0 28px 60px rgba(52,44,30,.14);
+
+  /* Motion — tight on purpose. Fast is most of what "feels good" means. */
+  --t1:60ms; --t2:110ms; --t3:170ms; --t4:240ms; --t5:340ms;
+  --e-out:cubic-bezier(0,0,.38,.9);
+  --e-in:cubic-bezier(.3,0,1,.9);
+  --e-std:cubic-bezier(.2,0,0,1);
+  --e-back:cubic-bezier(.2,1.22,.4,1);
+  --e-expo:cubic-bezier(.22,1,.36,1);
+
+  --display:'Fraunces',Georgia,'Times New Roman',serif;
+  --sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#1b1a17;  --ground-2:#232120;
+    --surface:#232220; --sunken:#1f1e1b;  --raised:#2b2926;
+    --ink:#ece8e0;     --ink-2:#b2aca1;   --ink-3:#857f75;
+    --rule:#35322d;    --rule-2:#4c4840;
+
+    --accent:#8fb3d6;   --accent-tint:#28313a;  --on-accent:#161513;
+    --done:#7cb98b;     --done-tint:#1f2b21;
+    --warn:#d7ab63;     --warn-tint:#2e2618;
+
+    --sh-1:0 1px 1px rgba(0,0,0,.3);
+    --sh-2:0 1px 2px rgba(0,0,0,.35),0 4px 12px rgba(0,0,0,.28);
+    --sh-3:0 10px 30px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#1b1a17;  --ground-2:#232120;
+  --surface:#232220; --sunken:#1f1e1b;  --raised:#2b2926;
+  --ink:#ece8e0;     --ink-2:#b2aca1;   --ink-3:#857f75;
+  --rule:#35322d;    --rule-2:#4c4840;
+  --accent:#8fb3d6;  --accent-tint:#28313a;  --on-accent:#161513;
+  --done:#7cb98b;    --done-tint:#1f2b21;
+  --warn:#d7ab63;    --warn-tint:#2e2618;
+  --sh-1:0 1px 1px rgba(0,0,0,.3);
+  --sh-2:0 1px 2px rgba(0,0,0,.35),0 4px 12px rgba(0,0,0,.28);
+  --sh-3:0 10px 30px rgba(0,0,0,.5);
+}
+@media (prefers-reduced-motion:reduce){
+  :root{--t1:.01ms;--t2:.01ms;--t3:.01ms;--t4:.01ms;--t5:.01ms}
+}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:16.5px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  overscroll-behavior:none}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+/* ═══════════ TYPE ═══════════
+   Fraunces for anything that carries the app's voice — its soft and wonk axes
+   are what stop it reading like a default system serif. IBM Plex Sans for
+   everything you operate, because it was drawn to be read at small sizes. */
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.012em;
+  line-height:1.14;margin:0;text-wrap:balance;
+  font-variation-settings:'SOFT' 28,'WONK' 1,'opsz' 40}
+.day-name{font-family:var(--display);font-weight:700;font-size:1.62rem;
+  letter-spacing:-.018em;line-height:1;font-variation-settings:'SOFT' 34,'WONK' 1,'opsz' 60;
+  white-space:nowrap}
+.muted{color:var(--ink-2)}
+.tiny{font-size:.79rem;color:var(--ink-3);line-height:1.45}
+.small{font-size:.875rem;color:var(--ink-2)}
+.label{font-family:var(--mono);font-size:.62rem;font-weight:600;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3)}
+
+/* ═══════════ SHELL ═══════════ */
+.app{max-width:452px;margin:0 auto;min-height:100dvh;display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;background:var(--ground);
+  position:relative;border-inline:1px solid var(--rule)}
+
+.appbar{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:calc(15px + env(safe-area-inset-top)) 18px 8px}
+.logo{font-family:var(--display);font-weight:700;font-size:1.02rem;letter-spacing:-.01em;
+  font-variation-settings:'SOFT' 30,'WONK' 1,'opsz' 24}
+.bar{display:flex;align-items:center;gap:7px}
+.iconbtn{width:33px;height:33px;border-radius:9px;border:1px solid var(--rule-2);
+  background:var(--surface);display:grid;place-items:center;color:var(--ink-2);
+  transition:color var(--t2) var(--e-out),transform var(--t1) var(--e-out)}
+.iconbtn:active{transform:scale(.93)}
+.iconbtn:hover{color:var(--ink)}
+.iconbtn svg{width:16px;height:16px}
+.avatar{width:34px;height:34px;border-radius:50%;border:1px solid var(--rule-2);
+  background:var(--sunken);padding:0;overflow:hidden;display:grid;place-items:center;
+  font-family:var(--display);font-weight:700;font-size:.84rem;color:var(--ink-2);
+  transition:transform var(--t1) var(--e-out),border-color var(--t2) var(--e-out)}
+.avatar:active{transform:scale(.93)}
+.avatar:hover{border-color:var(--accent)}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+
+main{overflow-y:auto;overflow-x:hidden;padding:0 18px 20px;position:relative}
+main::-webkit-scrollbar{width:0}
+
+.tabbar{display:flex;border-top:1px solid var(--rule);background:var(--surface);
+  padding-bottom:env(safe-area-inset-bottom)}
+.tabbtn{flex:1;background:none;border:none;display:flex;flex-direction:column;
+  align-items:center;gap:2px;padding:10px 4px 9px;color:var(--ink-3);
+  font-size:.68rem;font-weight:600;position:relative;white-space:nowrap;
+  transition:color var(--t2) var(--e-out)}
+.tabbtn svg{width:20px;height:20px}
+.tabbtn[aria-selected="true"]{color:var(--ink)}
+.tabbtn[aria-selected="true"]::before{content:'';position:absolute;top:0;width:22px;
+  height:2px;border-radius:0 0 2px 2px;background:var(--accent)}
+
+/* ═══════════ RING ═══════════
+   No glow, no gradient. The ring is drawn, not lit. */
+.ringwrap{display:grid;place-items:center;padding:16px 0 10px}
+.ring{position:relative;display:grid;place-items:center}
+.ring svg{transform:rotate(-90deg);overflow:visible;display:block}
+.seg{fill:none;stroke-linecap:round;
+  transition:stroke-dasharray var(--t4) var(--e-std),stroke-dashoffset var(--t4) var(--e-std),
+             stroke var(--t3) var(--e-out)}
+.seg.empty{stroke:var(--rule-2)}
+.ringmid{position:absolute;text-align:center;display:grid;gap:3px;place-items:center;
+  max-width:150px}
+.ringcount{font-family:var(--mono);font-size:.7rem;font-weight:500;color:var(--ink-3);
+  letter-spacing:.04em}
+.ring.bump{animation:bump var(--t5) var(--e-back)}
+@keyframes bump{0%{transform:scale(1)}38%{transform:scale(1.045)}100%{transform:scale(1)}}
+.ring.finale{animation:finale 880ms cubic-bezier(.45,0,.2,1) forwards}
+@keyframes finale{0%{transform:rotate(0) scale(1);opacity:1}
+  55%{transform:rotate(390deg) scale(1.06);opacity:1}
+  100%{transform:rotate(720deg) scale(.08);opacity:0}}
+
+/* ═══════════ ROWS ═══════════
+   A coloured dot, not a bar down the side. The stripe-on-a-rounded-card is
+   everywhere; a dot beside the words is how a person would mark a list. */
+/* One grouped card with hairline dividers, the way a native list works —
+   rather than a stack of separate floating cards, which is the look every
+   generated app lands on. */
+.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;
+  border:1px solid var(--rule);border-radius:13px;overflow:hidden;background:var(--surface)}
+.row{display:flex;align-items:center;gap:11px;padding:13px 12px;border:none;
+  position:relative;
+  /* The topic tints the whole row, not a dot beside it. color-mix keeps the
+     wash correct in both themes from one hex per topic. */
+  background:color-mix(in oklab,var(--topic,transparent) 9%,var(--surface));
+  transition:opacity var(--t3) var(--e-in),transform var(--t3) var(--e-in),
+             background var(--t2) var(--e-out)}
+.row + .row{box-shadow:inset 0 1px 0 var(--rule)}
+/* A soft vertical bead rather than a full-height bar — enough presence to scan
+   a list by colour, not so much that it becomes the loudest thing on screen. */
+.bead{width:4px;align-self:stretch;min-height:26px;border-radius:99px;flex:none;
+  background:var(--topic,var(--rule-2));opacity:.9}
+.row-sub b{font-weight:600;color:var(--topic,var(--ink-3))}
+.row-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.row-title{font-size:.95rem;line-height:1.35;position:relative;word-break:break-word}
+.row-sub{font-size:.75rem;color:var(--ink-3)}
+
+.row.in{animation:rowIn var(--t4) var(--e-back)}
+@keyframes rowIn{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:none}}
+.row.done{background:var(--sunken);opacity:.78}
+.row.done .row-title{color:var(--ink-3);text-decoration:line-through;
+  text-decoration-thickness:1.4px;text-decoration-color:var(--ink-3)}
+.row.done .bead{opacity:.45}
+.row .strike{position:absolute;left:0;top:52%;height:1.4px;width:100%;
+  background:var(--ink-3);transform-origin:left;animation:strike 150ms var(--e-out) forwards}
+@keyframes strike{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.row.out{opacity:0;transform:translateX(12px)}
+
+.cbx{position:relative;flex:none;width:24px;height:24px;
+  border:1.75px solid color-mix(in oklab,var(--topic,var(--rule-2)) 55%,var(--rule-2));
+  border-radius:7px;background:var(--sunken);padding:0;display:grid;place-items:center;
+  transition:background var(--t2) var(--e-out),border-color var(--t2) var(--e-out),
+             transform var(--t1) var(--e-out)}
+.cbx::after{content:'';position:absolute;inset:-10px}
+.cbx:active{transform:scale(.88)}
+.cbx svg{width:14px;height:14px}
+.cbx path{fill:none;stroke:var(--on-accent);stroke-width:3.2;stroke-linecap:round;
+  stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1}
+.cbx.on{background:var(--done);border-color:var(--done)}
+.cbx.on path{animation:draw 150ms var(--e-expo) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+
+.mini{flex:none;background:none;border:none;color:var(--ink-3);padding:5px;
+  border-radius:7px;line-height:0;transition:color var(--t2) var(--e-out)}
+.mini:hover{color:var(--ink)}
+.mini svg{width:16px;height:16px}
+
+/* ═══════════ BUTTONS ═══════════ Flat. No gradients anywhere. */
+.btn{font-family:var(--sans);font-size:.94rem;font-weight:600;border-radius:11px;
+  border:1px solid transparent;padding:13px 18px;width:100%;display:flex;
+  align-items:center;justify-content:center;gap:8px;
+  transition:transform var(--t1) var(--e-out),opacity var(--t2) var(--e-out),
+             background var(--t2) var(--e-out)}
+.btn:active{transform:scale(.985)}
+.btn.primary{background:var(--accent);color:var(--on-accent)}
+.btn.primary:disabled{opacity:.4;cursor:default}
+.btn.quiet{background:var(--surface);color:var(--ink-2);border-color:var(--rule-2)}
+.btn.quiet:hover{color:var(--ink)}
+.link{background:none;border:none;color:var(--ink-3);font-size:.84rem;font-weight:500;
+  padding:9px;width:100%;text-decoration:underline;text-underline-offset:3px;
+  font-family:var(--sans)}
+.link:hover{color:var(--ink-2)}
+
+/* ═══════════ EMPTY ═══════════ */
+.empty{text-align:center;padding:22px 10px;display:grid;gap:9px;justify-items:center}
+.empty h3{font-size:1.2rem}
+.fade-up{animation:fadeUp var(--t5) var(--e-out)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+
+/* ═══════════ SHEET ═══════════ */
+.scrim{position:fixed;inset:0;background:rgba(24,20,14,.42);z-index:90;
+  animation:fadeIn var(--t3) var(--e-out)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.scrim.out{animation:fadeOut var(--t3) var(--e-in) forwards}
+@keyframes fadeOut{to{opacity:0}}
+.sheet{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;
+  max-width:452px;max-height:92dvh;background:var(--ground);z-index:91;
+  border-radius:20px 20px 0 0;box-shadow:var(--sh-3);display:flex;flex-direction:column;
+  animation:sheetIn var(--t4) var(--e-std);padding-bottom:env(safe-area-inset-bottom);
+  border:1px solid var(--rule);border-bottom:none}
+@keyframes sheetIn{from{transform:translate(-50%,100%)}to{transform:translate(-50%,0)}}
+.sheet.out{animation:sheetOut var(--t3) var(--e-in) forwards}
+@keyframes sheetOut{to{transform:translate(-50%,100%)}}
+.grab{width:34px;height:4px;border-radius:99px;background:var(--rule-2);margin:9px auto 0;flex:none}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 18px 10px;flex:none}
+.sheet-head h2{font-size:1.24rem}
+.sheet-body{overflow-y:auto;padding:0 18px 18px;display:flex;flex-direction:column;gap:13px}
+.sheet-body::-webkit-scrollbar{width:0}
+
+/* ═══════════ FORM ═══════════ */
+.field{display:flex;flex-direction:column;gap:6px}
+.field > label{font-size:.81rem;font-weight:600;color:var(--ink-2)}
+.input{width:100%;font-family:var(--sans);font-size:.94rem;padding:12px 13px;
+  border-radius:11px;background:var(--surface);border:1px solid var(--rule-2);
+  color:var(--ink);transition:border-color var(--t2) var(--e-out)}
+.input::placeholder{color:var(--ink-3)}
+.input:focus{outline:none;border-color:var(--accent)}
+.pickrow{display:flex;gap:6px;flex-wrap:wrap}
+.pick{font-family:var(--sans);font-size:.79rem;font-weight:600;padding:7px 12px;
+  border-radius:99px;background:var(--surface);color:var(--ink-2);
+  border:1px solid var(--rule-2);display:inline-flex;align-items:center;gap:6px;
+  transition:border-color var(--t2) var(--e-out),color var(--t2) var(--e-out),
+             background var(--t2) var(--e-out),transform var(--t1) var(--e-out)}
+.pick:active{transform:scale(.95)}
+.pick i{width:8px;height:8px;border-radius:50%;flex:none}
+.pick[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--ground)}
+.pick[aria-pressed="true"] i{box-shadow:0 0 0 1.5px var(--ground)}
+.switchrow{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 14px;border-radius:12px;background:var(--surface);border:1px solid var(--rule)}
+.switch{width:43px;height:25px;border-radius:99px;background:var(--rule-2);border:none;
+  padding:3px;display:flex;transition:background var(--t2) var(--e-out)}
+.switch span{width:19px;height:19px;border-radius:50%;background:#fffdf8;display:block;
+  box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform var(--t3) var(--e-back)}
+.switch[aria-checked="true"]{background:var(--accent)}
+.switch[aria-checked="true"] span{transform:translateX(18px)}
+
+/* ═══════════ SELECTABLE ═══════════ */
+.selrow{display:flex;align-items:center;gap:11px;padding:12px 13px;border-radius:11px;
+  background:var(--surface);border:1px solid var(--rule);width:100%;text-align:left;
+  font-family:var(--sans);
+  transition:border-color var(--t2) var(--e-out),background var(--t2) var(--e-out),
+             transform var(--t1) var(--e-out)}
+.selrow:active{transform:scale(.99)}
+.selrow[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-tint)}
+.selbox{width:21px;height:21px;border-radius:6px;border:1.75px solid var(--rule-2);flex:none;
+  display:grid;place-items:center;transition:all var(--t2) var(--e-out)}
+.selrow[aria-pressed="true"] .selbox{background:var(--accent);border-color:var(--accent)}
+.selbox svg{width:12px;height:12px;opacity:0;stroke:var(--on-accent);stroke-width:3.4;
+  fill:none;stroke-linecap:round;stroke-linejoin:round;transition:opacity var(--t2) var(--e-out)}
+.selrow[aria-pressed="true"] .selbox svg{opacity:1}
+
+/* ═══════════ TOPICS ═══════════ */
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{width:32px;height:32px;border-radius:9px;border:2px solid transparent;padding:0;
+  transition:transform var(--t1) var(--e-out),border-color var(--t2) var(--e-out)}
+.sw:active{transform:scale(.9)}
+.sw[aria-pressed="true"]{border-color:var(--ink)}
+.topicrow{display:flex;align-items:center;gap:12px;padding:11px 12px;background:var(--surface);
+  border:1px solid var(--rule);border-radius:12px}
+.topicrow .name{flex:1;min-width:0;font-size:.93rem;font-weight:500}
+.topicrow .count{font-size:.75rem;color:var(--ink-3);font-family:var(--mono)}
+
+/* ═══════════ STATS ═══════════ */
+.statgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.stat{background:var(--surface);border:1px solid var(--rule);border-radius:12px;padding:13px 14px}
+.stat b{font-family:var(--display);font-size:1.65rem;font-weight:700;letter-spacing:-.02em;
+  display:block;line-height:1.05;font-variation-settings:'SOFT' 20,'opsz' 40}
+.stat span{font-size:.77rem;color:var(--ink-2);display:block;margin-top:2px;line-height:1.35}
+.week{display:flex;gap:5px}
+.week span{flex:1;aspect-ratio:1;border-radius:7px;background:var(--sunken);
+  border:1px solid var(--rule);display:grid;place-items:center;font-size:.62rem;
+  font-weight:600;color:var(--ink-3)}
+.week span.hit{background:var(--done);border-color:var(--done);color:var(--on-accent)}
+.heat{display:grid;grid-template-columns:repeat(14,1fr);gap:3px}
+.heat i{aspect-ratio:1;border-radius:2px;display:block}
+.barline{display:flex;flex-direction:column;gap:4px}
+.barline .t{display:flex;justify-content:space-between;font-size:.8rem}
+.bartrack{height:7px;border-radius:99px;background:var(--sunken);overflow:hidden}
+.bartrack i{display:block;height:100%;border-radius:99px}
+
+/* ═══════════ TOAST ═══════════ */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:76px;z-index:95;
+  display:flex;align-items:center;gap:12px;background:var(--ink);color:var(--ground);
+  padding:10px 12px 10px 15px;border-radius:11px;box-shadow:var(--sh-3);
+  font-size:.85rem;font-weight:500;animation:toastIn var(--t4) var(--e-back);
+  max-width:min(392px,calc(100% - 36px))}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
+.toast.out{animation:toastOut var(--t3) var(--e-in) forwards}
+@keyframes toastOut{to{opacity:0;transform:translate(-50%,12px)}}
+.toast button{background:none;border:none;color:var(--ground);font-weight:700;
+  font-size:.85rem;text-decoration:underline;text-underline-offset:3px;padding:4px 6px;
+  font-family:var(--sans)}
+
+/* ═══════════ MISC ═══════════ */
+.spark{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--done);
+  pointer-events:none;z-index:5;animation:fly var(--life,480ms) cubic-bezier(.15,.6,.4,1) forwards}
+@keyframes fly{0%{transform:translate(0,0) scale(1);opacity:1}
+  100%{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+.groupline{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin:18px 0 8px}
+.note{font-size:.79rem;color:var(--ink-2);background:var(--sunken);border-radius:10px;
+  padding:11px 12px;line-height:1.5;border:1px solid var(--rule)}
+.note b{color:var(--ink);font-weight:600}
+.greeting{text-align:center;font-size:.85rem;color:var(--ink-2);margin-top:-2px}
+.hidden{display:none!important}
+hr.rule{border:none;border-top:1px solid var(--rule);margin:2px 0}
+</style>
+
+<div class="app">
+  <header class="appbar">
+    <div class="logo">One&nbsp;Thing</div>
+    <div class="bar">
+      <button class="iconbtn" id="themeBtn" type="button" aria-label="Switch theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 108.5 8.5A6.6 6.6 0 0112 3.5z"/></svg>
+      </button>
+      <button class="avatar" id="profileBtn" type="button" aria-label="You and your stats"></button>
+    </div>
+  </header>
+
+  <main id="main"></main>
+
+  <nav class="tabbar">
+    <button class="tabbtn" data-tab="today" aria-selected="true" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.7V12l3 1.9"/></svg>Today</button>
+    <button class="tabbtn" data-tab="tasks" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6.5h11M9.5 12h11M9.5 17.5h11"/><path d="M3.5 6.3l1.3 1.3L7.2 5M3.5 11.8l1.3 1.3L7.2 10.5M3.5 17.3l1.3 1.3L7.2 16"/></svg>Tasks</button>
+  </nav>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var KEY = 'onething.v3';
+
+  /* ── Topic colours ──────────────────────────────────────
+     Ten hand-picked pairs. Each is a muted, readable hue with a light-theme
+     and a dark-theme value, so nothing turns neon when the theme flips. */
+  var SWATCHES = [
+    { id: 'clay',   l: '#a9552f', d: '#d9926b' },
+    { id: 'amber',  l: '#93670f', d: '#d2a851' },
+    { id: 'olive',  l: '#5d6b2d', d: '#a8bc6d' },
+    { id: 'forest', l: '#2f6b46', d: '#7cc093' },
+    { id: 'teal',   l: '#1f6570', d: '#6fb5c0' },
+    { id: 'slate',  l: '#3a5b83', d: '#90b2d6' },
+    { id: 'plum',   l: '#79406a', d: '#c895bb' },
+    { id: 'rose',   l: '#9c3a49', d: '#e0909b' },
+    { id: 'sand',   l: '#7d6a4a', d: '#c3ae8b' },
+    { id: 'stone',  l: '#5c574f', d: '#aaa39a' }
+  ];
+  function isDark() {
+    var t = document.documentElement.getAttribute('data-theme');
+    return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function swatchColor(id) {
+    var s = SWATCHES.filter(function (x) { return x.id === id; })[0] || SWATCHES[9];
+    return isDark() ? s.d : s.l;
+  }
+
+  /* ── Time ─────────────────────────────────────────────── */
+  function localDay(at, startHour) {
+    var d = new Date(at.getTime());
+    if (d.getHours() < startHour) d.setDate(d.getDate() - 1);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
+           String(d.getDate()).padStart(2, '0');
+  }
+  function parseDay(k) { var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function dayName(k) {
+    return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][parseDay(k).getDay()];
+  }
+  function shiftDay(k, n) {
+    var d = parseDay(k); d.setDate(d.getDate() + n);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
+           String(d.getDate()).padStart(2, '0');
+  }
+
+  /* ── State ────────────────────────────────────────────── */
+  function fresh() {
+    return {
+      name: '', avatar: '', dayStart: 4, theme: '', uid: 200,
+      topics: [
+        { id: 't1', n: 'Personal',    sw: 'plum'   },
+        { id: 't2', n: 'Health',      sw: 'forest' },
+        { id: 't3', n: 'Home',        sw: 'clay'   },
+        { id: 't4', n: 'Work/School', sw: 'slate'  }
+      ],
+      library: [
+        { id: 1, t: 'Morning meds',   top: 't2', rep: { k: 'daily' } },
+        { id: 2, t: 'Walk the dog',   top: 't2', rep: { k: 'daily' } },
+        { id: 3, t: 'Bins out',       top: 't3', rep: { k: 'week', d: [2] } },
+        { id: 4, t: 'Pay the rent',   top: 't1', rep: { k: 'month', d: 1 } },
+        { id: 5, t: 'Tidy the kitchen', top: 't3', rep: { k: 'none' } },
+        { id: 6, t: 'Clear the inbox',  top: 't4', rep: { k: 'none' } },
+        { id: 7, t: 'Call Mum',         top: 't1', rep: { k: 'none' } },
+        { id: 8, t: 'Book the dentist', top: 't2', rep: { k: 'none' } }
+      ],
+      day: null, history: []
+    };
+  }
+  var S;
+  try { S = JSON.parse(localStorage.getItem(KEY)) || fresh(); } catch (e) { S = fresh(); }
+  if (!S || !S.topics || !S.library) S = fresh();
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  if (S.theme) document.documentElement.setAttribute('data-theme', S.theme);
+
+  /* ── Repeat rules ──────────────────────────────────────
+     none  · once, sits in the library until you pick it
+     daily · every day
+     week  · chosen weekdays, e.g. Tuesday and Friday
+     month · a date each month, clamped to the last day in short months */
+  var WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  function repLabel(r) {
+    if (!r || r.k === 'none') return '';
+    if (r.k === 'daily') return 'Every day';
+    if (r.k === 'week') {
+      var d = (r.d || []).slice().sort(function (a, b) { return a - b; });
+      if (!d.length) return 'Weekly';
+      if (d.length === 7) return 'Every day';
+      if (d.length === 5 && d.join() === '1,2,3,4,5') return 'Weekdays';
+      if (d.length === 2 && d.join() === '0,6') return 'Weekends';
+      return d.map(function (i) { return WD[i]; }).join(', ');
+    }
+    if (r.k === 'month') return ordinal(r.d) + ' of the month';
+    return '';
+  }
+  function ordinal(n) {
+    var s2 = ['th','st','nd','rd'], v = n % 100;
+    return n + (s2[(v - 20) % 10] || s2[v] || s2[0]);
+  }
+  function dueOn(t, key) {
+    var r = t.rep;
+    if (!r || r.k === 'none') return false;
+    if (r.k === 'daily') return true;
+    var d = parseDay(key);
+    if (r.k === 'week') return (r.d || []).indexOf(d.getDay()) > -1;
+    if (r.k === 'month') {
+      var last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      return d.getDate() === Math.min(r.d, last);
+    }
+    return false;
+  }
+  function repeats(t) { return t.rep && t.rep.k !== 'none'; }
+
+  function topic(id) { return S.topics.filter(function (t) { return t.id === id; })[0] || S.topics[0]; }
+  function topColor(id) { return swatchColor(topic(id).sw); }
+  function todayKey() { return localDay(new Date(), S.dayStart); }
+
+  function ensureDay() {
+    var k = todayKey();
+    if (!S.day || S.day.key !== k) {
+      S.day = { key: k, planned: false, tasks: [], done: [] };
+      // Anything whose rule lands on this date is already in the day.
+      S.library.filter(function (t) { return dueOn(t, k); })
+        .forEach(function (t) { S.day.tasks.push(t.id); });
+      save();
+    }
+  }
+  ensureDay();
+  function lib(id) { return S.library.filter(function (t) { return t.id === id; })[0]; }
+  function openIds() {
+    return S.day.tasks.filter(function (id) { return S.day.done.indexOf(id) < 0 && lib(id); });
+  }
+  function dayTotal() { return S.day.tasks.filter(function (id) { return lib(id); }).length; }
+
+  /* ── Helpers ──────────────────────────────────────────── */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+  function tick(ms) { try { if (navigator.vibrate) navigator.vibrate(ms || 10); } catch (e) {} }
+  function el(h) { var d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; }
+  var main = document.getElementById('main');
+  var tab = 'today';
+
+  var toastEl = null, toastT = null;
+  function toast(msg, undo) {
+    if (toastEl) { toastEl.remove(); clearTimeout(toastT); }
+    toastEl = el('<div class="toast"><span>' + esc(msg) + '</span>' +
+      (undo ? '<button type="button">Undo</button>' : '') + '</div>');
+    if (undo) toastEl.querySelector('button').addEventListener('click', function () { undo(); hideToast(); });
+    document.body.appendChild(toastEl);
+    toastT = setTimeout(hideToast, 4500);
+  }
+  function hideToast() {
+    if (!toastEl) return;
+    var t = toastEl; toastEl = null; t.classList.add('out');
+    setTimeout(function () { t.remove(); }, 210);
+  }
+
+  /* `colours` holds one hex per finished segment. The ring ends the day as a
+     picture of what the day was made of, rather than a uniform green bar. */
+  function ringSvg(total, colours, px) {
+    var R = px / 2 - 11, C = 2 * Math.PI * R, n = Math.max(total, 1);
+    var gap = n === 1 ? 0 : Math.min(13, C * 0.034);
+    var seg = Math.max((C - gap * n) / n, 2);
+    var out = '<svg width="' + px + '" height="' + px + '" viewBox="0 0 ' + px + ' ' + px +
+      '" aria-hidden="true">';
+    for (var i = 0; i < n; i++) {
+      var c = colours[i];
+      out += '<circle class="seg' + (c ? '' : ' empty') + '" cx="' + px / 2 + '" cy="' + px / 2 +
+        '" r="' + R + '" stroke-width="8"' + (c ? ' stroke="' + c + '"' : '') +
+        ' stroke-dasharray="' + seg.toFixed(2) + ' ' + (C - seg).toFixed(2) +
+        '" stroke-dashoffset="' + (-(i * (seg + gap))).toFixed(2) + '"/>';
+    }
+    return out + '</svg>';
+  }
+  /* Finished tasks first, in the order they were finished. */
+  function doneColours() {
+    return S.day.done.filter(function (id) { return lib(id); })
+      .map(function (id) { return topColor(lib(id).top); });
+  }
+
+  function sparks(anchor, host) {
+    if (reduce || !host) return;
+    var a = anchor.getBoundingClientRect(), h = host.getBoundingClientRect();
+    var cx = a.left - h.left + a.width / 2 + host.scrollLeft;
+    var cy = a.top - h.top + a.height / 2 + host.scrollTop;
+    for (var i = 0; i < 6; i++) {
+      var s = document.createElement('span'); s.className = 'spark';
+      var ang = (-145 + Math.random() * 110) * Math.PI / 180, d = 20 + Math.random() * 22;
+      s.style.left = cx + 'px'; s.style.top = cy + 'px';
+      s.style.setProperty('--dx', (Math.cos(ang) * d).toFixed(1) + 'px');
+      s.style.setProperty('--dy', (Math.sin(ang) * d).toFixed(1) + 'px');
+      s.style.setProperty('--life', (400 + Math.random() * 180).toFixed(0) + 'ms');
+      host.appendChild(s);
+      (function (n2) { setTimeout(function () { n2.remove(); }, 700); })(s);
+    }
+  }
+
+  /* A line that changes with what actually happened. Descriptive, never praise
+     — "you did four things" is a fact; "great job!" is an opinion someone who
+     feels behind will simply disagree with. */
+  function greeting() {
+    var k = todayKey(), y = shiftDay(k, -1);
+    var yc = S.history.filter(function (h) { return h.day === y; }).length;
+    var last = S.history.length ? S.history[S.history.length - 1].day : null;
+    if (last && last !== k && last !== y) {
+      var gap = Math.round((parseDay(k) - parseDay(last)) / 864e5);
+      if (gap > 3) return 'Good to see you back. Nothing was lost.';
+    }
+    if (yc >= 4) return 'You finished ' + yc + ' things yesterday.';
+    if (yc > 0) return 'Yesterday: ' + yc + (yc === 1 ? ' thing' : ' things') + ' done.';
+    var h = new Date().getHours();
+    if (h < 11) return 'A fresh one.';
+    if (h < 17) return 'Still plenty of day left.';
+    return 'Whatever fits in the evening.';
+  }
+
+  function rowHtml(t, done) {
+    var tp = topic(t.top), r = repLabel(t.rep);
+    return '<li class="row' + (done ? ' done' : '') + '" data-id="' + t.id +
+      '" style="--topic:' + topColor(t.top) + '">' +
+      '<button class="cbx' + (done ? ' on' : '') + '" type="button" aria-label="' +
+        (done ? 'Put back ' : 'Finish ') + esc(t.t) + '">' +
+        '<svg viewBox="0 0 24 24"><path pathLength="1" d="M5 12.5l4.6 4.6L19 7"/></svg></button>' +
+      '<span class="bead"></span>' +
+      '<span class="row-body"><span class="row-title">' + esc(t.t) + '</span>' +
+      '<span class="row-sub"><b>' + esc(tp.n) + '</b>' + (r ? ' · ' + esc(r) : '') +
+      '</span></span></li>';
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     TODAY
+     ═══════════════════════════════════════════════════════ */
+  function renderToday() {
+    ensureDay();
+    var open = openIds(), total = dayTotal(), done = total - open.length;
+    var clear = total > 0 && open.length === 0;
+    var doneList = S.day.done.filter(function (id) { return lib(id); });
+
+    main.innerHTML =
+      (clear ? '' :
+        '<div class="ringwrap"><div class="ring" id="ring">' +
+          ringSvg(total, doneColours(), 196) +
+          '<div class="ringmid"><span class="day-name">' + dayName(S.day.key) + '</span>' +
+          '<span class="ringcount">' + (total ? done + ' of ' + total : 'nothing yet') +
+          '</span></div></div></div>' +
+        '<p class="greeting">' + esc(greeting()) + '</p>') +
+      '<div id="body" style="margin-top:16px"></div>';
+
+    var body = document.getElementById('body');
+
+    /* Finished tasks stay on the page, checked and struck, in their own group
+       underneath. Tapping one puts it back. */
+    var doneBlock = doneList.length
+      ? '<div class="groupline"><span class="label">Done</span>' +
+        '<span class="tiny">' + doneList.length + '</span></div>' +
+        '<ul class="list" id="doneList">' +
+        doneList.map(function (id) { return rowHtml(lib(id), true); }).join('') + '</ul>' +
+        '<p class="tiny" style="margin-top:7px">Tap one to put it back.</p>'
+      : '';
+
+    if (clear) {
+      body.innerHTML =
+        '<div class="empty fade-up" style="padding-top:30px">' +
+          '<span class="day-name" style="font-size:1.3rem;color:var(--ink-3)">' +
+            dayName(S.day.key) + '</span>' +
+          '<h3 style="font-size:1.5rem">That\u2019s the day.</h3>' +
+          '<p class="small">' + total + (total === 1 ? ' thing' : ' things') + ' finished.</p>' +
+          '<button class="btn primary" id="add" type="button" style="margin-top:8px;max-width:250px">' +
+            'Add something else</button></div>' + doneBlock;
+    } else {
+      body.innerHTML =
+        (open.length
+          ? '<ul class="list" id="openList">' +
+            open.map(function (id) { return rowHtml(lib(id)); }).join('') + '</ul>'
+          : '<div class="empty"><h3>Nothing left on today</h3>' +
+            '<p class="small">Pick a few things from your list.</p></div>') +
+        '<button class="btn quiet" id="add" type="button" style="margin-top:14px">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+          'stroke-width="2.2" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>' +
+          (open.length ? 'Add more to today' : 'Choose today\u2019s tasks') + '</button>' +
+        doneBlock;
+      body.querySelectorAll('#openList .row').forEach(function (row) {
+        row.querySelector('.cbx').addEventListener('click', function (e) {
+          finish(row, Number(row.dataset.id), e.currentTarget); });
+      });
+    }
+
+    body.querySelectorAll('#doneList .row').forEach(function (row) {
+      row.querySelector('.cbx').addEventListener('click', function () {
+        undoTask(Number(row.dataset.id)); tick(8); });
+    });
+    var addBtn = body.querySelector('#add');
+    if (addBtn) addBtn.addEventListener('click', openPicker);
+  }
+
+  function finish(row, id, cbx) {
+    if (row.dataset.busy) return;
+    row.dataset.busy = '1';
+    var t = lib(id);
+    cbx.classList.add('on');
+    tick(12);
+    sparks(cbx, main);
+    var title = row.querySelector('.row-title');
+    if (title && !title.querySelector('.strike')) {
+      var st = document.createElement('span'); st.className = 'strike'; title.appendChild(st);
+    }
+    row.classList.add('done');
+
+    S.day.done.push(id);
+    S.history.push({ hid: 'h' + Date.now() + Math.random().toString(36).slice(2, 5),
+                     taskId: id, t: t.t, top: t.top, day: S.day.key, at: Date.now() });
+    save();
+
+    var total = dayTotal(), left = openIds().length;
+    paintRing(total);
+    toast('Finished “' + t.t + '”', function () { undoTask(id); });
+
+    // The row slides out of the open list and comes back, checked, under Done.
+    // It is never simply gone.
+    setTimeout(function () {
+      row.classList.add('out');
+      setTimeout(function () {
+        if (left === 0 && total > 0) finale(); else renderToday();
+      }, reduce ? 0 : 165);
+    }, reduce ? 0 : 185);
+  }
+
+  function undoTask(id) {
+    S.day.done = S.day.done.filter(function (x) { return x !== id; });
+    for (var i = S.history.length - 1; i >= 0; i--) {
+      if (S.history[i].taskId === id && S.history[i].day === S.day.key) { S.history.splice(i, 1); break; }
+    }
+    save();
+    if (tab === 'today') renderToday();
+  }
+
+  function paintRing(total) {
+    var ring = document.getElementById('ring');
+    if (!ring) return;
+    var cols = doneColours();
+    ring.innerHTML = ringSvg(total, cols, 196) +
+      '<div class="ringmid"><span class="day-name">' + dayName(S.day.key) +
+      '</span><span class="ringcount">' + cols.length + ' of ' + total + '</span></div>';
+    if (!reduce) { ring.classList.remove('bump'); void ring.offsetWidth; ring.classList.add('bump'); }
+  }
+
+  /* The only long animation in the app, and it happens at most once a day. */
+  function finale() {
+    var ring = document.getElementById('ring');
+    var body = document.getElementById('body');
+    if (body) body.innerHTML = '';
+    var g = document.querySelector('.greeting'); if (g) g.remove();
+    tick(18);
+    if (ring && !reduce) {
+      ring.classList.add('finale');
+      setTimeout(renderToday, 820);
+    } else { renderToday(); }
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     TASKS
+     ═══════════════════════════════════════════════════════ */
+  var filterTop = 'all';
+  function renderTasks() {
+    var items = S.library.filter(function (t) { return filterTop === 'all' || t.top === filterTop; });
+    var daily = items.filter(repeats);
+    var rest = items.filter(function (t) { return !repeats(t); });
+    var newTop = S.topics[0].id;
+
+    main.innerHTML =
+      '<div style="padding-top:6px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">' +
+        '<div><h2 style="font-size:1.5rem">Your tasks</h2>' +
+        '<p class="tiny" style="margin-top:3px">Everything you might do. Nothing here is a promise.</p></div>' +
+        '<button class="iconbtn" id="topicsBtn" type="button" aria-label="Manage topics" ' +
+          'style="flex:none;margin-top:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+          'stroke-width="1.9" stroke-linecap="round"><circle cx="8" cy="8" r="3.4"/>' +
+          '<circle cx="16.5" cy="16.5" r="3.4"/><path d="M8 14.5v5M5.5 17h5"/></svg></button>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:14px">' +
+        '<input class="input" id="newTask" placeholder="Add a task…" maxlength="70" ' +
+          'autocomplete="off" enterkeyhint="done">' +
+        '<button class="btn primary" id="newGo" type="button" style="width:48px;flex:none;padding:0" ' +
+          'aria-label="Add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
+          'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">' +
+          '<path d="M12 5.5v13M5.5 12h13"/></svg></button></div>' +
+      '<div class="pickrow" id="newTop" style="margin-top:8px">' +
+        S.topics.map(function (t, i) {
+          return '<button class="pick" type="button" data-t="' + t.id + '" aria-pressed="' + (i === 0) +
+            '"><i style="background:' + topColor(t.id) + '"></i>' + esc(t.n) + '</button>'; }).join('') +
+      '</div>' +
+      '<hr class="rule" style="margin:18px 0 0">' +
+      '<div class="pickrow" id="filters" style="margin-top:14px">' +
+        '<button class="pick" type="button" data-f="all" aria-pressed="' + (filterTop === 'all') +
+          '">All</button>' +
+        S.topics.map(function (t) {
+          return '<button class="pick" type="button" data-f="' + t.id + '" aria-pressed="' +
+            (filterTop === t.id) + '"><i style="background:' + topColor(t.id) + '"></i>' +
+            esc(t.n) + '</button>'; }).join('') +
+      '</div>' +
+      (daily.length ? '<div class="groupline"><span class="label">Repeating</span>' +
+        '<span class="tiny">' + daily.length + '</span></div><ul class="list">' +
+        daily.map(libRow).join('') + '</ul>' : '') +
+      (rest.length ? '<div class="groupline"><span class="label">Pick from</span>' +
+        '<span class="tiny">' + rest.length + '</span></div><ul class="list">' +
+        rest.map(libRow).join('') + '</ul>' : '') +
+      (!items.length ? '<div class="empty"><h3>Nothing here yet</h3>' +
+        '<p class="small">Add a task above and it will be waiting tomorrow morning.</p></div>' : '') +
+      '<p class="note" style="margin-top:18px">Tap any task to set when it repeats — ' +
+      '<b>every day</b>, <b>certain days</b> (just Tuesdays, say), or <b>once a month</b>. ' +
+      'Repeating tasks are already in your circle when the day comes round.</p>';
+
+    var input = document.getElementById('newTask');
+    document.querySelectorAll('#newTop .pick').forEach(function (b) {
+      b.addEventListener('click', function () {
+        newTop = b.dataset.t;
+        document.querySelectorAll('#newTop .pick').forEach(function (x) {
+          x.setAttribute('aria-pressed', String(x.dataset.t === newTop)); });
+      });
+    });
+    function add() {
+      var v = input.value.trim(); if (!v) return;
+      var nt = { id: ++S.uid, t: v, top: newTop, rep: { k: 'none' } };
+      S.library.unshift(nt);
+      save(); input.value = ''; renderTasks(); tick();
+      // Offer the repeat choice right after adding rather than burying it.
+      openTask(nt.id, true);
+    }
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    document.getElementById('newGo').addEventListener('click', add);
+    document.getElementById('topicsBtn').addEventListener('click', openTopics);
+    document.querySelectorAll('#filters .pick').forEach(function (b) {
+      b.addEventListener('click', function () { filterTop = b.dataset.f; renderTasks(); }); });
+
+    main.querySelectorAll('.row[data-id]').forEach(function (row) {
+      var id = Number(row.dataset.id);
+      row.querySelector('[data-act="edit"]').addEventListener('click', function () {
+        openTask(id, false);
+      });
+      row.querySelector('[data-act="del"]').addEventListener('click', function () {
+        var t = lib(id), ix = S.library.indexOf(t);
+        S.library.splice(ix, 1);
+        S.day.tasks = S.day.tasks.filter(function (x) { return x !== id; });
+        save(); renderTasks();
+        toast('Deleted “' + t.t + '”', function () {
+          S.library.splice(ix, 0, t); save(); renderTasks(); });
+      });
+    });
+  }
+
+  function libRow(t) {
+    var r = repLabel(t.rep);
+    return '<li class="row" data-id="' + t.id + '" style="--topic:' + topColor(t.top) + '">' +
+      '<span class="bead"></span>' +
+      '<button class="row-body" data-act="edit" type="button" style="background:none;border:none;' +
+        'text-align:left;padding:0;font-family:var(--sans);align-items:flex-start">' +
+        '<span class="row-title">' + esc(t.t) + '</span>' +
+        '<span class="row-sub"><b>' + esc(topic(t.top).n) + '</b>' +
+        (r ? ' · ' + esc(r) : '') + '</span></button>' +
+      (r ? '<span class="mini" style="color:var(--topic);pointer-events:none" aria-hidden="true">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a8 8 0 0113.5-3.5L20 8"/>' +
+        '<path d="M20 15a8 8 0 01-13.5 3.5L4 16"/><path d="M20 4.5V8h-3.5M4 19.5V16h3.5"/>' +
+        '</svg></span>' : '') +
+      '<button class="mini" data-act="del" type="button" aria-label="Delete ' + esc(t.t) + '">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
+        'stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></li>';
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     SHEETS
+     ═══════════════════════════════════════════════════════ */
+  function sheet(title, html, ready) {
+    var scrim = el('<div class="scrim"></div>');
+    var sh = el('<div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>' +
+      '<div class="sheet-head"><h2>' + title + '</h2>' +
+      '<button class="iconbtn" data-close type="button" aria-label="Close">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+      'stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>' +
+      '<div class="sheet-body">' + html + '</div></div>');
+    document.body.appendChild(scrim); document.body.appendChild(sh);
+    function close() {
+      sh.classList.add('out'); scrim.classList.add('out');
+      setTimeout(function () { sh.remove(); scrim.remove(); }, 230);
+    }
+    scrim.addEventListener('click', close);
+    sh.querySelector('[data-close]').addEventListener('click', close);
+    document.addEventListener('keydown', function k(e) {
+      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', k); } });
+    if (ready) ready(sh, close);
+    return close;
+  }
+
+  /* ── Topics ──────────────────────────────────────────── */
+  function openTopics() {
+    function body() {
+      return S.topics.map(function (t) {
+        var n = S.library.filter(function (x) { return x.top === t.id; }).length;
+        return '<div class="topicrow" data-t="' + t.id + '">' +
+          '<button class="sw" data-edit="' + t.id + '" style="background:' + topColor(t.id) +
+            '" aria-label="Change colour for ' + esc(t.n) + '"></button>' +
+          '<span class="name">' + esc(t.n) + '</span>' +
+          '<span class="count">' + n + '</span>' +
+          (S.topics.length > 1 ? '<button class="mini" data-del="' + t.id +
+            '" type="button" aria-label="Delete topic"><svg viewBox="0 0 24 24" fill="none" ' +
+            'stroke="currentColor" stroke-width="1.9" stroke-linecap="round">' +
+            '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button>' : '') +
+          '</div>' +
+          '<div class="swatches hidden" data-pal="' + t.id + '" style="padding:2px 2px 8px">' +
+            SWATCHES.map(function (s) {
+              return '<button class="sw" type="button" data-set="' + t.id + '|' + s.id +
+                '" aria-pressed="' + (t.sw === s.id) + '" style="background:' +
+                (isDark() ? s.d : s.l) + '" aria-label="' + s.id + '"></button>'; }).join('') +
+          '</div>';
+      }).join('') +
+      '<hr class="rule" style="margin:8px 0">' +
+      '<div class="field"><label>Add a topic</label>' +
+        '<div style="display:flex;gap:8px">' +
+          '<input class="input" id="newTopName" placeholder="Study, Fitness, Side project…" maxlength="22">' +
+          '<button class="btn primary" id="newTopGo" type="button" style="width:48px;flex:none;padding:0" ' +
+            'aria-label="Add topic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
+            'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">' +
+            '<path d="M12 5.5v13M5.5 12h13"/></svg></button></div>' +
+        '<div class="swatches" id="newTopSw" style="margin-top:8px">' +
+          SWATCHES.map(function (s, i) {
+            return '<button class="sw" type="button" data-new="' + s.id + '" aria-pressed="' +
+              (i === 6) + '" style="background:' + (isDark() ? s.d : s.l) + '" aria-label="' +
+              s.id + '"></button>'; }).join('') + '</div></div>';
+    }
+
+    sheet('Topics', body(), function (sh) {
+      var chosenSw = SWATCHES[6].id;
+      function rewire() { sh.querySelector('.sheet-body').innerHTML = body(); wire(); }
+      function wire() {
+        sh.querySelectorAll('[data-edit]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var pal = sh.querySelector('[data-pal="' + b.dataset.edit + '"]');
+            sh.querySelectorAll('[data-pal]').forEach(function (p) {
+              if (p !== pal) p.classList.add('hidden'); });
+            pal.classList.toggle('hidden');
+          });
+        });
+        sh.querySelectorAll('[data-set]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var p = b.dataset.set.split('|');
+            topic(p[0]).sw = p[1]; save(); tick(); rewire(); render();
+          });
+        });
+        sh.querySelectorAll('[data-del]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var id = b.dataset.del;
+            var used = S.library.filter(function (x) { return x.top === id; });
+            var fallback = S.topics.filter(function (t) { return t.id !== id; })[0];
+            if (used.length && !confirm(used.length + ' task(s) will move to “' +
+                fallback.n + '”. Delete this topic?')) return;
+            used.forEach(function (x) { x.top = fallback.id; });
+            S.topics = S.topics.filter(function (t) { return t.id !== id; });
+            if (filterTop === id) filterTop = 'all';
+            save(); rewire(); render();
+          });
+        });
+        sh.querySelectorAll('[data-new]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            chosenSw = b.dataset.new;
+            sh.querySelectorAll('[data-new]').forEach(function (x) {
+              x.setAttribute('aria-pressed', String(x.dataset.new === chosenSw)); });
+          });
+        });
+        var nameIn = sh.querySelector('#newTopName');
+        function addTopic() {
+          var v = nameIn.value.trim(); if (!v) return;
+          S.topics.push({ id: 'u' + (++S.uid), n: v, sw: chosenSw });
+          save(); tick(); rewire(); render();
+        }
+        nameIn.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); addTopic(); } });
+        sh.querySelector('#newTopGo').addEventListener('click', addTopic);
+      }
+      wire();
+    });
+  }
+
+  /* ── Task editor: name, topic, and when it repeats ──────
+     This is the answer to "a task that only happens on Tuesdays": set it once
+     and the day picks it up every Tuesday from then on. */
+  function openTask(id, isNew) {
+    var t = lib(id);
+    if (!t) return;
+    var draft = { t: t.t, top: t.top, rep: JSON.parse(JSON.stringify(t.rep || { k: 'none' })) };
+
+    sheet(isNew ? 'When does it repeat?' : 'Edit task',
+      '<div class="field"><label>Task</label>' +
+        '<input class="input" id="eName" maxlength="70" value="' + esc(t.t) + '"></div>' +
+      '<div class="field"><label>Topic</label><div class="pickrow" id="eTop">' +
+        S.topics.map(function (tp) {
+          return '<button class="pick" type="button" data-t="' + tp.id + '" aria-pressed="' +
+            (tp.id === draft.top) + '"><i style="background:' + topColor(tp.id) + '"></i>' +
+            esc(tp.n) + '</button>'; }).join('') + '</div></div>' +
+      '<div class="field"><label>Repeats</label><div class="pickrow" id="eKind">' +
+        [['none','Never'],['daily','Every day'],['week','Certain days'],['month','Once a month']]
+          .map(function (k) {
+            return '<button class="pick" type="button" data-k="' + k[0] + '" aria-pressed="' +
+              (draft.rep.k === k[0]) + '">' + k[1] + '</button>'; }).join('') + '</div></div>' +
+      '<div id="eDetail"></div>' +
+      '<p class="tiny" id="eSummary"></p>' +
+      '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:10px;' +
+        'display:flex;flex-direction:column;gap:6px">' +
+        '<button class="btn primary" id="eSave" type="button">Save</button>' +
+        (isNew ? '' : '<button class="link" id="eDel" type="button">Delete this task</button>') +
+      '</div>',
+
+      function (sh, close) {
+        var detail = sh.querySelector('#eDetail'), summary = sh.querySelector('#eSummary');
+
+        function paintDetail() {
+          if (draft.rep.k === 'week') {
+            if (!draft.rep.d) draft.rep.d = [];
+            detail.innerHTML = '<div class="pickrow" id="eDays" style="gap:5px">' +
+              WD.map(function (n, i) {
+                return '<button class="pick" type="button" data-d="' + i + '" aria-pressed="' +
+                  (draft.rep.d.indexOf(i) > -1) + '" style="flex:1;justify-content:center;' +
+                  'padding:9px 0">' + n + '</button>'; }).join('') + '</div>';
+            detail.querySelectorAll('[data-d]').forEach(function (b) {
+              b.addEventListener('click', function () {
+                var i = Number(b.dataset.d), at = draft.rep.d.indexOf(i);
+                if (at > -1) draft.rep.d.splice(at, 1); else draft.rep.d.push(i);
+                b.setAttribute('aria-pressed', String(draft.rep.d.indexOf(i) > -1));
+                tick(8); paintSummary();
+              });
+            });
+          } else if (draft.rep.k === 'month') {
+            if (!draft.rep.d) draft.rep.d = Math.min(parseDay(todayKey()).getDate(), 28);
+            var opts = '';
+            for (var n2 = 1; n2 <= 31; n2++) {
+              opts += '<option value="' + n2 + '"' + (n2 === draft.rep.d ? ' selected' : '') +
+                '>' + ordinal(n2) + '</option>';
+            }
+            detail.innerHTML = '<div class="field"><label>Day of the month</label>' +
+              '<select class="input" id="eDom">' + opts + '</select></div>';
+            detail.querySelector('#eDom').addEventListener('change', function (e) {
+              draft.rep.d = Number(e.target.value); paintSummary(); });
+          } else {
+            detail.innerHTML = '';
+          }
+          paintSummary();
+        }
+
+        function paintSummary() {
+          if (draft.rep.k === 'none') {
+            summary.textContent = 'Stays on your list until you choose it for a day.';
+          } else if (draft.rep.k === 'week' && !(draft.rep.d || []).length) {
+            summary.textContent = 'Pick at least one day.';
+          } else {
+            summary.innerHTML = 'Added to your day automatically · <b>' +
+              esc(repLabel(draft.rep)) + '</b>';
+          }
+        }
+
+        sh.querySelectorAll('#eTop .pick').forEach(function (b) {
+          b.addEventListener('click', function () {
+            draft.top = b.dataset.t; tick();
+            sh.querySelectorAll('#eTop .pick').forEach(function (x) {
+              x.setAttribute('aria-pressed', String(x.dataset.t === draft.top)); });
+          });
+        });
+        sh.querySelectorAll('#eKind .pick').forEach(function (b) {
+          b.addEventListener('click', function () {
+            draft.rep = { k: b.dataset.k };
+            tick();
+            sh.querySelectorAll('#eKind .pick').forEach(function (x) {
+              x.setAttribute('aria-pressed', String(x.dataset.k === draft.rep.k)); });
+            paintDetail();
+          });
+        });
+        paintDetail();
+
+        sh.querySelector('#eSave').addEventListener('click', function () {
+          var name = sh.querySelector('#eName').value.trim();
+          if (name) t.t = name;
+          t.top = draft.top;
+          t.rep = draft.rep;
+          if (t.rep.k === 'week' && !(t.rep.d || []).length) t.rep = { k: 'none' };
+          // If it now falls on today, put it straight in the day.
+          if (dueOn(t, S.day.key) && S.day.tasks.indexOf(t.id) < 0) S.day.tasks.push(t.id);
+          save(); close(); tick(12);
+          setTimeout(render, 60);
+        });
+        var del = sh.querySelector('#eDel');
+        if (del) del.addEventListener('click', function () {
+          var ix = S.library.indexOf(t);
+          S.library.splice(ix, 1);
+          S.day.tasks = S.day.tasks.filter(function (x) { return x !== t.id; });
+          save(); close(); setTimeout(render, 60);
+          setTimeout(function () {
+            toast('Deleted “' + t.t + '”', function () {
+              S.library.splice(ix, 0, t); save(); render(); });
+          }, 300);
+        });
+      });
+  }
+
+  /* ── Pick tasks for today ────────────────────────────── */
+  function openPicker() {
+    var chosen = {};
+    var avail = S.library.filter(function (t) { return S.day.tasks.indexOf(t.id) < 0; });
+    sheet('Add to today',
+      (avail.length
+        ? '<p class="tiny">Tap what you want to finish. Everything else stays on your list.</p>' +
+          '<div style="display:flex;flex-direction:column;gap:7px">' + avail.map(function (t) {
+            return '<button class="selrow" type="button" data-id="' + t.id + '" aria-pressed="false">' +
+              '<span class="selbox"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.6 4.6L19 7"/></svg></span>' +
+              '<span class="dot" style="--topic:' + topColor(t.top) + '"></span>' +
+              '<span style="flex:1;min-width:0"><span style="display:block;font-size:.93rem">' +
+              esc(t.t) + '</span><span class="row-sub">' + esc(topic(t.top).n) + '</span></span></button>';
+          }).join('') + '</div>'
+        : '<div class="empty"><h3>Everything is already on today</h3>' +
+          '<p class="small">Add more in the Tasks tab.</p></div>') +
+      '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:10px">' +
+        '<button class="btn primary" id="go" type="button" disabled>Add to today</button></div>',
+      function (sh, close) {
+        var go = sh.querySelector('#go');
+        sh.querySelectorAll('.selrow').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var id = Number(b.dataset.id);
+            chosen[id] = !chosen[id];
+            b.setAttribute('aria-pressed', String(!!chosen[id]));
+            var n = Object.keys(chosen).filter(function (k) { return chosen[k]; }).length;
+            go.disabled = !n;
+            go.textContent = n ? 'Add ' + n + (n === 1 ? ' task' : ' tasks') : 'Add to today';
+            tick(8);
+          });
+        });
+        go.addEventListener('click', function () {
+          Object.keys(chosen).forEach(function (k) { if (chosen[k]) S.day.tasks.push(Number(k)); });
+          S.day.planned = true; save(); close(); tick(12);
+          setTimeout(renderToday, 60);
+        });
+      });
+  }
+
+  /* ── Profile + stats ─────────────────────────────────── */
+  function openProfile() {
+    var byDay = {}, byTop = {};
+    S.history.forEach(function (h) {
+      byDay[h.day] = (byDay[h.day] || 0) + 1;
+      byTop[h.top] = (byTop[h.top] || 0) + 1; });
+    var k = todayKey(), active = 0;
+    for (var i = 0; i < 30; i++) if (byDay[shiftDay(k, -i)]) active++;
+    var best = 0, bestDay = null;
+    Object.keys(byDay).forEach(function (d) { if (byDay[d] > best) { best = byDay[d]; bestDay = d; } });
+
+    var names = ['S','M','T','W','T','F','S'], week = '';
+    for (var j = 6; j >= 0; j--) {
+      var dk = shiftDay(k, -j);
+      week += '<span class="' + (byDay[dk] ? 'hit' : '') + '">' + names[parseDay(dk).getDay()] + '</span>';
+    }
+    var heat = '';
+    for (var m = 83; m >= 0; m--) {
+      var hk = shiftDay(k, -m), n = byDay[hk] || 0;
+      heat += '<i style="background:' + (n === 0 ? 'var(--sunken)'
+        : n < 2 ? 'color-mix(in oklab,var(--done) 32%,var(--sunken))'
+        : n < 4 ? 'color-mix(in oklab,var(--done) 62%,var(--sunken))' : 'var(--done)') + '"></i>';
+    }
+    var tot = Object.keys(byTop).reduce(function (a, x) { return a + byTop[x]; }, 0) || 1;
+    var bars = Object.keys(byTop).sort(function (a, b) { return byTop[b] - byTop[a]; })
+      .map(function (id) {
+        return '<div class="barline"><div class="t"><span>' + esc(topic(id).n) + '</span>' +
+          '<span class="tiny">' + byTop[id] + '</span></div><div class="bartrack">' +
+          '<i style="width:' + Math.max(Math.round(byTop[id] / tot * 100), 3) + '%;background:' +
+          topColor(id) + '"></i></div></div>'; }).join('');
+
+    var todayDone = S.history.filter(function (h) { return h.day === k; });
+
+    sheet('You',
+      '<div style="display:flex;align-items:center;gap:13px">' +
+        '<button class="avatar" id="ava" type="button" style="width:60px;height:60px;font-size:1.25rem" ' +
+          'aria-label="Change picture"></button>' +
+        '<div style="flex:1;min-width:0">' +
+          '<input class="input" id="nameIn" placeholder="Your name" maxlength="28" value="' +
+            esc(S.name) + '">' +
+          '<button class="link" id="avaPick" type="button" style="text-align:left;width:auto;padding:6px 2px">' +
+            (S.avatar ? 'Change picture' : 'Add a picture') + '</button></div>' +
+        '<input type="file" id="avaFile" accept="image/*" class="hidden"></div>' +
+
+      '<div class="groupline"><span class="label">Your stats</span></div>' +
+      '<div class="statgrid">' +
+        '<div class="stat"><b>' + S.history.length + '</b><span>finished, all time</span></div>' +
+        '<div class="stat"><b>' + active + '<span style="font-family:var(--sans);font-size:.85rem;' +
+          'font-weight:600;color:var(--ink-3);display:inline"> / 30</span></b>' +
+          '<span>days active recently</span></div>' +
+        '<div class="stat"><b>' + best + '</b><span>most in a day' +
+          (bestDay ? ' · ' + dayName(bestDay) : '') + '</span></div>' +
+        '<div class="stat"><b>' + (byDay[k] || 0) + '</b><span>finished today</span></div></div>' +
+
+      '<div class="groupline"><span class="label">This week</span></div>' +
+      '<div class="week">' + week + '</div>' +
+      '<p class="tiny">A dip is a dip. There is no streak to lose.</p>' +
+
+      '<div class="groupline"><span class="label">Last 12 weeks</span></div>' +
+      '<div class="heat">' + heat + '</div>' +
+
+      (bars ? '<div class="groupline"><span class="label">What you finish most</span></div>' +
+        '<div style="display:flex;flex-direction:column;gap:11px">' + bars + '</div>' : '') +
+
+      (todayDone.length ? '<div class="groupline"><span class="label">Finished today</span></div>' +
+        '<ul class="list">' + todayDone.map(function (h) {
+          return '<li class="row"><span class="dot" style="--topic:' + topColor(h.top) + '"></span>' +
+            '<span class="row-body"><span class="row-title" style="color:var(--ink-3);' +
+            'text-decoration:line-through">' + esc(h.t) + '</span></span>' +
+            '<button class="mini" data-undo="' + h.taskId + '" type="button" aria-label="Put back">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
+            'stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 10-2.5 5.8"/>' +
+            '<path d="M20 6.5V12h-5.5"/></svg></button></li>'; }).join('') + '</ul>' +
+        '<p class="tiny">Tapped one by mistake? Put it back.</p>' : '') +
+
+      '<div class="groupline"><span class="label">Settings</span></div>' +
+      '<div class="field"><label>Your day starts at</label>' +
+        '<div class="pickrow" id="hours">' + [2,3,4,5,6,7].map(function (h) {
+          return '<button class="pick" type="button" data-h="' + h + '" aria-pressed="' +
+            (h === S.dayStart) + '">' + h + 'am</button>'; }).join('') + '</div>' +
+        '<p class="tiny" id="hourNote"></p></div>' +
+      '<div class="switchrow"><span style="font-size:.9rem">Dark theme</span>' +
+        '<button class="switch" id="themeSw" role="switch" aria-checked="' + isDark() +
+        '"><span></span></button></div>' +
+      '<button class="link" id="wipe" type="button" style="margin-top:4px">Reset everything</button>',
+
+      function (sh, close) {
+        var ava = sh.querySelector('#ava');
+        function paint() {
+          ava.innerHTML = S.avatar ? '<img src="' + S.avatar + '" alt="">'
+            : (S.name ? esc(S.name.trim()[0].toUpperCase()) : '☺');
+        }
+        paint();
+        function pickFile() { sh.querySelector('#avaFile').click(); }
+        ava.addEventListener('click', pickFile);
+        sh.querySelector('#avaPick').addEventListener('click', pickFile);
+        sh.querySelector('#avaFile').addEventListener('change', function (e) {
+          var f = e.target.files && e.target.files[0]; if (!f) return;
+          var r = new FileReader();
+          r.onload = function () {
+            var img = new Image();
+            img.onload = function () {
+              // Downscaled before storing — a phone photo would blow the quota.
+              var size = 200, cv = document.createElement('canvas');
+              cv.width = cv.height = size;
+              var g = cv.getContext('2d'), s = Math.min(img.width, img.height);
+              g.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+              S.avatar = cv.toDataURL('image/jpeg', 0.82);
+              save(); paint(); topAvatar();
+            };
+            img.src = r.result;
+          };
+          r.readAsDataURL(f);
+        });
+        sh.querySelector('#nameIn').addEventListener('input', function (e) {
+          S.name = e.target.value; save(); paint(); topAvatar(); });
+
+        sh.querySelectorAll('[data-undo]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            undoTask(Number(b.dataset.undo)); close();
+            setTimeout(function () { toast('Put back on today'); }, 260);
+          });
+        });
+
+        function note() {
+          sh.querySelector('#hourNote').innerHTML = 'Something finished at 1am counts toward ' +
+            (S.dayStart > 1 ? '<b>the day before</b>' : '<b>that same day</b>') +
+            '. Nothing is deleted when the day turns over.';
+        }
+        note();
+        sh.querySelectorAll('#hours .pick').forEach(function (b) {
+          b.addEventListener('click', function () {
+            S.dayStart = Number(b.dataset.h); save(); tick();
+            sh.querySelectorAll('#hours .pick').forEach(function (x) {
+              x.setAttribute('aria-pressed', String(Number(x.dataset.h) === S.dayStart)); });
+            note();
+          });
+        });
+        sh.querySelector('#themeSw').addEventListener('click', function () {
+          var next = isDark() ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          S.theme = next; save();
+          this.setAttribute('aria-checked', String(next === 'dark'));
+          render();
+        });
+        sh.querySelector('#wipe').addEventListener('click', function () {
+          if (!confirm('Clear all tasks, topics, history and settings?')) return;
+          localStorage.removeItem(KEY); S = fresh(); ensureDay(); save();
+          document.documentElement.removeAttribute('data-theme');
+          close(); render(); topAvatar();
+        });
+      });
+  }
+
+  /* ── Morning ─────────────────────────────────────────── */
+  function morning() {
+    if (S.day.planned) return;
+    var late = new Date().getHours() >= 14;
+    var chosen = {}, capSel = null;
+    var avail = S.library.filter(function (t) { return S.day.tasks.indexOf(t.id) < 0; });
+
+    sheet(late ? 'Shape the rest of the day?' : 'Good morning',
+      '<p class="tiny">' + (late
+        ? 'Half the day has gone. Pick a couple of things for what is left — or skip it.'
+        : 'How much have you got today? This resets every morning.') + '</p>' +
+      '<div class="pickrow" id="cap" style="gap:7px">' +
+        [['little','Not much'],['some','Some'],['lots','Plenty']].map(function (c) {
+          return '<button class="pick" type="button" data-c="' + c[0] + '" aria-pressed="false" ' +
+            'style="flex:1;justify-content:center">' + c[1] + '</button>'; }).join('') + '</div>' +
+      '<p class="tiny" id="capNote">Pick one and I will only suggest as much as that.</p>' +
+      '<div class="groupline"><span class="label">What do you want to finish?</span></div>' +
+      '<div style="display:flex;flex-direction:column;gap:7px" id="mList"></div>' +
+      '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:10px">' +
+        '<button class="btn primary" id="go" type="button">Start my day</button>' +
+        '<button class="link" id="skip" type="button">Skip — just show me today</button></div>',
+      function (sh, close) {
+        var listEl = sh.querySelector('#mList'), go = sh.querySelector('#go');
+        var N = { little: 3, some: 6, lots: 99 };
+        var TXT = { little: 'Three at most. That is a whole day.',
+                    some: 'A handful, and the rest waits.',
+                    lots: 'Everything you might want to look at.' };
+        function paint() {
+          listEl.innerHTML = avail.slice(0, capSel ? N[capSel] : 6).map(function (t) {
+            return '<button class="selrow" type="button" data-id="' + t.id + '" aria-pressed="' +
+              !!chosen[t.id] + '"><span class="selbox"><svg viewBox="0 0 24 24">' +
+              '<path d="M5 12.5l4.6 4.6L19 7"/></svg></span>' +
+              '<span class="dot" style="--topic:' + topColor(t.top) + '"></span>' +
+              '<span style="flex:1;min-width:0"><span style="display:block;font-size:.93rem">' +
+              esc(t.t) + '</span><span class="row-sub">' + esc(topic(t.top).n) + '</span></span></button>';
+          }).join('') || '<p class="tiny">Nothing in your list yet — add some in Tasks.</p>';
+          listEl.querySelectorAll('.selrow').forEach(function (b) {
+            b.addEventListener('click', function () {
+              var id = Number(b.dataset.id);
+              chosen[id] = !chosen[id];
+              b.setAttribute('aria-pressed', String(!!chosen[id]));
+              var c = Object.keys(chosen).filter(function (x) { return chosen[x]; }).length;
+              go.textContent = c ? 'Start my day · ' + c : 'Start my day';
+              tick(8);
+            });
+          });
+        }
+        paint();
+        sh.querySelectorAll('#cap .pick').forEach(function (b) {
+          b.addEventListener('click', function () {
+            capSel = b.dataset.c; tick();
+            sh.querySelectorAll('#cap .pick').forEach(function (x) {
+              x.setAttribute('aria-pressed', String(x.dataset.c === capSel)); });
+            sh.querySelector('#capNote').textContent = TXT[capSel];
+            paint();
+          });
+        });
+        function done() {
+          Object.keys(chosen).forEach(function (x) {
+            if (chosen[x] && S.day.tasks.indexOf(Number(x)) < 0) S.day.tasks.push(Number(x)); });
+          S.day.planned = true; save(); close();
+          setTimeout(renderToday, 60);
+        }
+        go.addEventListener('click', function () { tick(12); done(); });
+        sh.querySelector('#skip').addEventListener('click', function () { chosen = {}; done(); });
+      });
+  }
+
+  /* ═══════════ BOOT ═══════════ */
+  function topAvatar() {
+    document.getElementById('profileBtn').innerHTML = S.avatar
+      ? '<img src="' + S.avatar + '" alt="">'
+      : (S.name ? esc(S.name.trim()[0].toUpperCase()) : '☺');
+  }
+  function render() {
+    if (tab === 'today') renderToday(); else renderTasks();
+    document.querySelectorAll('.tabbtn').forEach(function (b) {
+      if (b.dataset.tab === tab) b.setAttribute('aria-selected', 'true');
+      else b.removeAttribute('aria-selected'); });
+    if (!reduce) main.animate([{ opacity: 0 }, { opacity: 1 }],
+      { duration: 120, easing: 'cubic-bezier(0,0,.38,.9)' });
+  }
+  document.querySelectorAll('.tabbtn').forEach(function (b) {
+    b.addEventListener('click', function () { tab = b.dataset.tab; tick(8); render(); }); });
+  document.getElementById('profileBtn').addEventListener('click', openProfile);
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    var next = isDark() ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    S.theme = next; save(); render();
+  });
+
+  topAvatar();
+  render();
+  setTimeout(morning, 400);
+})();
+</script>
+<script>
+  /* Registered with a relative path so this works from a repo subfolder on
+     GitHub Pages (username.github.io/one-thing/) as well as from a domain root. */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function (err) {
+        console.warn('Service worker did not register:', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
