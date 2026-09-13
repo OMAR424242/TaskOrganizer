@@ -22,6 +22,6 @@
    It must never appear in this file or anywhere else in this repo.
    ═══════════════════════════════════════════════════════════════ */
 window.OT_CONFIG = {
-  SUPABASE_URL: '',
-  SUPABASE_ANON_KEY: ''
+  SUPABASE_URL: 'https://eaqeplnrelzshmdbkdjf.supabase.co',
+  SUPABASE_ANON_KEY: 'sb_publishable_-BF5MXJR-Opwoq8Yzql7lg_E50gHlte'
 };
