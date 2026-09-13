@@ -223,6 +223,21 @@
   }
   ensureDay();
   if (S.day && !S.day.pick) S.day.pick = {};
+
+  /* Archiving a finished one-off works from a stamp put on the task at the
+     moment it is ticked — which means everything anyone had already finished
+     before that existed carries no stamp, and sat in the list for ever. That
+     is precisely the pile this was meant to clear, so it is worth one pass to
+     put the stamps on from the history, using the day each task was last
+     finished. Done once, and recorded so it never runs again. */
+  if (!S.archived1) {
+    var lastDone = {};
+    S.history.forEach(function (h) {
+      if (!lastDone[h.taskId] || h.day > lastDone[h.taskId]) lastDone[h.taskId] = h.day; });
+    S.library.forEach(function (t) {
+      if (!t.doneAt && !repeats(t) && lastDone[t.id]) t.doneAt = lastDone[t.id]; });
+    S.archived1 = 1;
+  }
   /* Taking something off today has to be recorded, not just done. The day's
      task list is merged between devices as a union, so a removal that leaves
      no trace is put straight back by the next sync — and since a sync also
