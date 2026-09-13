@@ -206,7 +206,11 @@ h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wr
 @media (max-width:460px){.acctbanner .btn{width:100%}}
 
 main{overflow-y:auto;overflow-x:hidden;padding:0 16px 20px;position:relative;
-  -webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  /* Vertical only. Without it the browser spends the first moments of every
+     drag deciding whether you meant to pan sideways, and that hesitation is
+     what a rough scroll actually is. */
+  touch-action:pan-y}
 main::-webkit-scrollbar{width:0}
 
 .tabbar{display:flex;border-top:2px solid var(--rule);background:var(--surface);
@@ -231,8 +235,11 @@ main::-webkit-scrollbar{width:0}
   transition:transform var(--t3) var(--e-back)}
 .tabbtn[aria-selected="true"]::after{transform:translateX(-50%) scaleX(1)}
 
-/* Anything tappable gets the same small give. */
-.iconbtn:active,.avatar:active,.mini:active,.selrow:active{transform:scale(.9)}
+/* Anything tappable gets the same small give. The big targets you might
+   also start a scroll on wait, like the rows do; the small ones in the bar
+   are not somewhere anyone starts a swipe, so they answer immediately. */
+.iconbtn:active,.avatar:active,.mini:active{transform:scale(.9)}
+.selrow:active{transform:scale(.97);transition-delay:70ms}
 .mini,.selrow{transition:transform var(--t1) var(--e-out),color var(--t2) var(--e-out),
   border-color var(--t2) var(--e-out),background var(--t2) var(--e-out)}
 
@@ -285,10 +292,17 @@ main::-webkit-scrollbar{width:0}
 
 /* A row you can press should say so under the thumb. Transform only — it
    runs on the compositor and costs nothing, which is the whole rule for
-   motion on a phone. */
+   motion on a phone.
+
+   The delay is the important part. A finger landing on a row to start a
+   scroll fires :active just the same as a tap, so without it every scroll
+   gesture began by visibly squeezing whatever you happened to touch — the
+   single biggest reason scrolling felt rough. Waiting 70ms before showing
+   anything lets a scroll cancel the press first; a real tap still gets its
+   answer well inside the time anyone notices. */
 .row{transition:opacity var(--t3) var(--e-in),transform var(--t2) var(--e-out),
      background var(--t2) var(--e-out),border-color var(--t2) var(--e-out)}
-.row:active{transform:scale(.985)}
+.row:active{transform:scale(.985);transition-delay:70ms}
 .row.done:active{transform:none}
 
 /* A paused task is still legible, just clearly not in play. */
@@ -494,6 +508,21 @@ main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
 .bartrack{height:12px;border-radius:99px;background:var(--sunken);overflow:hidden;
   border:1px solid var(--rule)}
 .bartrack i{display:block;height:100%;border-radius:99px}
+
+/* ═══════════ ARCHIVE ═══════════
+   The record of what has been finished. Deliberately lighter than a task
+   row: these are not things you can act on, and drawing them like the ones
+   you can would make the list read as work still to do. */
+.archive{display:flex;flex-direction:column;gap:2px}
+.archday{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-3);padding:12px 2px 5px}
+.archday:first-child{padding-top:2px}
+.archrow{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;
+  background:var(--sunken)}
+.archrow .dot{width:9px;height:9px;box-shadow:none}
+.archname{flex:1;min-width:0;font-size:.88rem;font-weight:700;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.archrow .tiny{flex:none;font-size:.72rem}
 
 /* ═══════════ TOAST ═══════════ */
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:82px;z-index:95;

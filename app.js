@@ -188,6 +188,24 @@
   }
   function repeats(t) { return t.rep && t.rep.k !== 'none'; }
 
+  /* A one-off you have finished is archived: it keeps its place in your
+     history and stops sitting in the list of things you might do, which is
+     the only place it was ever noise.
+
+     It is worked out from two things that have to agree — the stamp put on
+     the task when it was finished, and a surviving completion in the
+     history — rather than from the stamp alone. That matters because the
+     history is the one part of this document that merges losslessly across
+     devices: undo the completion anywhere and the entry goes, so the task
+     comes back everywhere, even if the stamp itself survived the trip. */
+  function archived() {
+    var done = {}, out = {};
+    S.history.forEach(function (h) { done[h.taskId] = 1; });
+    S.library.forEach(function (t) {
+      if (t.doneAt && !repeats(t) && done[t.id]) out[t.id] = 1; });
+    return out;
+  }
+
   function topic(id) { return S.topics.filter(function (t) { return t.id === id; })[0] || S.topics[0]; }
   function topColor(id) { return swatchColor(topic(id).sw); }
   function todayKey() { return localDay(new Date(), S.dayStart); }
@@ -195,7 +213,7 @@
   function ensureDay() {
     var k = todayKey();
     if (!S.day || S.day.key !== k) {
-      S.day = { key: k, planned: false, tasks: [], done: [] };
+      S.day = { key: k, planned: false, tasks: [], done: [], pick: {} };
       // Anything whose rule lands on this date is already in the day.
       // A paused task keeps its rule and stops acting on it.
       S.library.filter(function (t) { return !t.paused && dueOn(t, k); })
@@ -204,6 +222,31 @@
     }
   }
   ensureDay();
+  if (S.day && !S.day.pick) S.day.pick = {};
+  /* Taking something off today has to be recorded, not just done. The day's
+     task list is merged between devices as a union, so a removal that leaves
+     no trace is put straight back by the next sync — and since a sync also
+     pulls back the copy this device pushed a moment ago, that happened on one
+     device too: the row went, and a second later it was there again, which is
+     indistinguishable from the button not working.
+
+     A plain list of removed ids would not be enough either, because putting
+     something back has to beat having taken it off, and a union of two lists
+     has no way to say which came last. So each decision is stamped:
+
+         day.pick = { <task id>: [when, 1 on today / 0 off it] }
+
+     and the merge keeps whichever of the two is later. That makes taking off
+     and putting back symmetrical, and both survive a round trip. */
+  function markDay(id, on) {
+    if (!S.day.pick) S.day.pick = {};
+    S.day.pick[id] = [Date.now(), on ? 1 : 0];
+  }
+  function offDay(id, yes) { markDay(id, !yes); }
+  function onDay(id) {
+    markDay(id, true);
+    if (S.day.tasks.indexOf(id) < 0) S.day.tasks.push(id);
+  }
   function lib(id) { return S.library.filter(function (t) { return t.id === id; })[0]; }
   function openIds() {
     return S.day.tasks.filter(function (id) { return S.day.done.indexOf(id) < 0 && lib(id); });
@@ -440,6 +483,17 @@
     return 'Whatever fits in the evening.';
   }
 
+  /* "Yesterday" beats a date, and a weekday beats a date inside the last
+     week. Past that a date is the only thing that means anything. */
+  function dayLabel(key) {
+    var k = todayKey();
+    if (key === k) return 'Today';
+    if (key === shiftDay(k, -1)) return 'Yesterday';
+    for (var i = 2; i <= 6; i++) if (key === shiftDay(k, -i)) return dayName(key);
+    var d = parseDay(key);
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  }
+
   function rowHtml(t, done) {
     var tp = topic(t.top), r = repLabel(t.rep);
     return '<li class="row' + (done ? ' done' : '') + '" data-id="' + t.id +
@@ -567,8 +621,10 @@
     if (at < 0) return;
     S.day.tasks.splice(at, 1);
     S.day.done = S.day.done.filter(function (x) { return x !== id; });
+    offDay(id, true);
     save(); tick(8, 'del'); render();
     toast('Took “' + t.t + '” off today', function () {
+      offDay(id, false);
       if (S.day.tasks.indexOf(id) < 0) S.day.tasks.splice(at, 0, id);
       save(); play('undo'); render();
     });
@@ -654,11 +710,9 @@
   var filterTop = 'all';
   function renderTasks() {
     var keepY = main.scrollTop;
+    var gone = archived();
     var items = S.library.filter(function (t) {
-      // A one-off you have finished is finished. It stays in your history and
-      // in today's Done list, and stops sitting in the list of things to do,
-      // which is the only place it was ever noise.
-      if (t.doneAt && !repeats(t)) return false;
+      if (gone[t.id]) return false;
       return filterTop === 'all' || t.top === filterTop; });
     /* Within each group, same-topic rows sit together. The list is tinted by
        topic, so leaving it in the order things happened to be typed turns
@@ -786,6 +840,7 @@
       S.library.splice(ix, 1);
       S.libDel.push(id);
       S.day.tasks = S.day.tasks.filter(function (x) { return x !== id; });
+      offDay(id, false);
       save(); renderTasks();
       toast('Deleted “' + t.t + '”', function () {
         S.library.splice(ix, 0, t);
@@ -1035,8 +1090,10 @@
           t.top = draft.top;
           t.rep = draft.rep;
           if (t.rep.k === 'week' && !(t.rep.d || []).length) t.rep = { k: 'none' };
-          // If it now falls on today, put it straight in the day.
-          if (dueOn(t, S.day.key) && S.day.tasks.indexOf(t.id) < 0) S.day.tasks.push(t.id);
+          // If it now falls on today, put it straight in the day — unless you
+          // took it off today on purpose, which editing it does not undo.
+          var p = (S.day.pick || {})[t.id];
+          if (dueOn(t, S.day.key) && !(p && p[1] === 0)) onDay(t.id);
           save(); close(); tick(12);
           setTimeout(render, 60);
         });
@@ -1048,8 +1105,9 @@
             // tomorrow and looks broken.
             S.day.tasks = S.day.tasks.filter(function (x) { return x !== t.id; });
             S.day.done = S.day.done.filter(function (x) { return x !== t.id; });
-          } else if (dueOn(t, S.day.key) && S.day.tasks.indexOf(t.id) < 0) {
-            S.day.tasks.push(t.id);
+            offDay(t.id, true);
+          } else if (dueOn(t, S.day.key)) {
+            onDay(t.id);
           }
           save(); tick(8, t.paused ? 'del' : 'add'); close();
           setTimeout(render, 60);
@@ -1078,9 +1136,9 @@
   /* ── Pick tasks for today ────────────────────────────── */
   function openPicker() {
     var chosen = {};
+    var goneIds = archived();
     var avail = S.library.filter(function (t) {
-      return !t.paused && !(t.doneAt && !repeats(t)) &&
-             S.day.tasks.indexOf(t.id) < 0; });
+      return !t.paused && !goneIds[t.id] && S.day.tasks.indexOf(t.id) < 0; });
     sheet('Add to today',
       (avail.length
         ? '<p class="tiny">Tap what you want to finish. Everything else stays on your list.</p>' +
@@ -1109,7 +1167,7 @@
           });
         });
         go.addEventListener('click', function () {
-          Object.keys(chosen).forEach(function (k) { if (chosen[k]) S.day.tasks.push(Number(k)); });
+          Object.keys(chosen).forEach(function (k) { if (chosen[k]) onDay(Number(k)); });
           S.day.planned = true; save(); close(); tick(12);
           setTimeout(renderToday, 60);
         });
@@ -1475,6 +1533,23 @@
 
     var todayDone = S.history.filter(function (h) { return h.day === k; });
 
+    // Newest first, capped — the whole history can be thousands of rows and
+    // this is a panel, not an export.
+    var past = S.history.filter(function (h) { return h.day !== k; })
+      .sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+    var earlier = past.slice(0, 60), older = past.length - earlier.length;
+    var lastDay = null, earlierHtml = '';
+    earlier.forEach(function (h) {
+      if (h.day !== lastDay) {
+        lastDay = h.day;
+        earlierHtml += '<div class="archday">' + esc(dayLabel(h.day)) + '</div>';
+      }
+      earlierHtml += '<div class="archrow">' +
+        '<span class="dot" style="--topic:' + topColor(h.top) + '"></span>' +
+        '<span class="archname">' + esc(h.t) + '</span>' +
+        '<span class="tiny">' + esc(topic(h.top).n) + '</span></div>';
+    });
+
     sheet('You',
       '<div style="display:flex;align-items:center;gap:13px">' +
         '<button class="avatar" id="ava" type="button" style="width:60px;height:60px;font-size:1.25rem" ' +
@@ -1516,6 +1591,18 @@
             'stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 10-2.5 5.8"/>' +
             '<path d="M20 6.5V12h-5.5"/></svg></button></li>'; }).join('') + '</ul>' +
         '<p class="tiny">Tapped one by mistake? Put it back.</p>' : '') +
+
+      /* Everything finished before today, newest first. Tasks that repeat
+         come back by themselves and one-offs disappear from the list once
+         they are done, so without this there was nowhere left to see that
+         any of it had happened — and for a great many people that record is
+         the entire point of ticking something off. */
+      (earlier.length ? '<div class="groupline"><span class="label">Finished before today</span>' +
+        '<span class="tiny">' + earlier.length + '</span></div>' +
+        '<div class="archive">' + earlierHtml + '</div>' +
+        (older > 0 ? '<p class="tiny">' + older +
+          ' older ' + (older === 1 ? 'one is' : 'ones are') +
+          ' kept too, and counted in your stats.</p>' : '') : '') +
 
       '<div id="wallCard">' + wallHtml() + '</div>' +
 
@@ -1767,7 +1854,7 @@
       // The dailies belong on today by definition; a few of the one-offs go on
       // too, so the first screen after this is never an empty one.
       added.daily.concat(added.once.slice(0, 3)).forEach(function (id) {
-        if (lib(id) && S.day.tasks.indexOf(id) < 0) S.day.tasks.push(id);
+        if (lib(id)) onDay(id);
       });
       S.day.planned = true;              // the morning question would be noise now
       save();
@@ -1846,9 +1933,9 @@
     if (S.day.planned) return;
     var late = new Date().getHours() >= 14;
     var chosen = {}, capSel = null;
+    var goneIds = archived();
     var avail = S.library.filter(function (t) {
-      return !t.paused && !(t.doneAt && !repeats(t)) &&
-             S.day.tasks.indexOf(t.id) < 0; });
+      return !t.paused && !goneIds[t.id] && S.day.tasks.indexOf(t.id) < 0; });
 
     sheet(late ? 'Shape the rest of the day?' : 'Good morning',
       '<p class="tiny">' + (late
@@ -1902,7 +1989,7 @@
         });
         function done() {
           Object.keys(chosen).forEach(function (x) {
-            if (chosen[x] && S.day.tasks.indexOf(Number(x)) < 0) S.day.tasks.push(Number(x)); });
+            if (chosen[x]) onDay(Number(x)); });
           S.day.planned = true; save(); close();
           setTimeout(renderToday, 60);
         }

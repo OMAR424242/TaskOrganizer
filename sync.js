@@ -24,6 +24,12 @@
      topics   same
      day.done union, when both devices are on the same day
 
+   One thing here is not a set, because it cannot be. A union can only ever
+   add, so removing something from today could never survive a merge — the
+   other copy still had it, and back it came. Taking a task off today, and
+   putting it back, are recorded in day.pick as a stamped decision per task,
+   and the later stamp wins.
+
    Everything else — your name, avatar, theme, day-start hour — is
    genuinely last-write-wins, because for those it's the right answer.
    ═══════════════════════════════════════════════════════════════ */
@@ -146,6 +152,17 @@ window.OTSync = (function () {
                       baseIsRemote ? local.topics : remote.topics,
                       function (t) { return t.id; })
       .filter(function (t) { return !topGone[t.id]; });
+
+    // Finishing a one-off stamps the task. Whichever document happened to
+    // win the row, that stamp has to survive the merge, or a task you
+    // finished on your phone climbs back into the list on your laptop. It
+    // only ever gets set here; what takes it away is undoing the completion,
+    // which removes the history entry that the stamp is checked against.
+    var stamped = {};
+    (local.library || []).concat(remote.library || []).forEach(function (t) {
+      if (t && t.doneAt && !stamped[t.id]) stamped[t.id] = t.doneAt; });
+    out.library.forEach(function (t) {
+      if (!t.doneAt && stamped[t.id]) t.doneAt = stamped[t.id]; });
     if (!out.topics.length) out.topics = base.topics || local.topics || remote.topics;
 
     // Today. Only worth merging when both devices agree what today is —
@@ -153,10 +170,24 @@ window.OTSync = (function () {
     var ld = local.day, rd = remote.day;
     if (ld && rd && ld.key === rd.key) {
       var done = idset(ld.done, rd.done);
+      /* The day's tasks are a union, which on its own can only ever add —
+         so taking something off today never survived a sync, on any number
+         of devices. `pick` carries a stamped decision per task, on or off,
+         and the later stamp wins. Union, then apply the decisions. */
+      var pick = {};
+      [ld.pick, rd.pick].forEach(function (m) {
+        Object.keys(m || {}).forEach(function (id) {
+          var p = m[id];
+          if (!p || !p.length) return;
+          if (!pick[id] || p[0] > pick[id][0]) pick[id] = p;
+        });
+      });
       out.day = {
         key: ld.key,
-        tasks: uniq(ld.tasks, rd.tasks, function (x) { return x; }),
+        tasks: uniq(ld.tasks, rd.tasks, function (x) { return x; })
+          .filter(function (x) { return !(pick[x] && pick[x][1] === 0); }),
         done: Object.keys(done).map(Number),
+        pick: pick,
         planned: !!(ld.planned || rd.planned),
         cap: (base.day && base.day.cap) || ld.cap || rd.cap || null
       };
