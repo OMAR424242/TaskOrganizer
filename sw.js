@@ -7,11 +7,16 @@
  * Your tasks are NOT in here. They live in localStorage on the device, which
  * this file never touches — clearing the cache cannot lose your data.
  */
-const CACHE = 'one-thing-v1';
+const CACHE = 'one-thing-v2';
 
 const SHELL = [
   './',
   './index.html',
+  './styles.css',
+  './config.js',
+  './sync.js',
+  './app.js',
+  './fonts/nunito-variable.woff2',
   './manifest.webmanifest',
   './favicon.png',
   './icons/icon-192.png',
@@ -57,15 +62,23 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Everything else: cache first, since the shell is content-addressed by the
-  // CACHE name above.
+  // The sync service and the auth endpoints must never be cached — a stale
+  // token response is worse than no response. Let them go straight past.
+  const url = new URL(req.url);
+  if (url.hostname.endsWith('.supabase.co')) return;
+
+  // Everything else: cache first, since the shell is versioned by the CACHE
+  // name above rather than by per-file revalidation.
   e.respondWith(
-    caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-      if (res && res.status === 200 && res.type === 'basic') {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy));
-      }
-      return res;
-    }).catch(() => hit))
+    caches.match(req).then((hit) => {
+      if (hit) return hit;
+      return fetch(req).then((res) => {
+        if (res && res.status === 200 && res.type === 'basic') {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      });
+    })
   );
 });
