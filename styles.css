@@ -26,18 +26,28 @@
 }
 
 :root{
-  --ground:#ffffff;   --ground-2:#f7f7f7;
-  --surface:#ffffff;  --sunken:#f7f7f7;   --raised:#ffffff;
-  --ink:#3c3c3c;      --ink-2:#777777;    --ink-3:#afafaf;
-  --rule:#e5e5e5;     --rule-2:#d4d4d4;
+  /* The ground is a warm off-white rather than paper white, so the cards
+     sitting on it read as objects with an edge instead of as holes cut in
+     a blank page. Surfaces stay pure white for exactly that contrast. */
+  --ground:#faf7f2;   --ground-2:#f2ede5;
+  --surface:#ffffff;  --sunken:#f4f0ea;   --raised:#ffffff;
+  --ink:#332f2b;      --ink-2:#6f6862;    --ink-3:#a8a099;
+  --rule:#e4ded4;     --rule-2:#cfc7bb;
 
-  /* The five workhorses. Each carries a darker edge for button bottoms. */
-  --green:#4ead2b;    --green-dk:#3d8c1e;  --green-soft:#dff2cd;
-  --blue:#1cb0f6;     --blue-dk:#1899d6;   --blue-soft:#ddf4ff;
-  --purple:#ce82ff;   --purple-dk:#a568cc; --purple-soft:#f7ecff;
-  --orange:#ff9600;   --orange-dk:#e08600; --orange-soft:#fff0d9;
-  --red:#ff4b4b;      --red-dk:#ea2b2b;    --red-soft:#ffdfe0;
-  --yellow:#ffc800;   --yellow-dk:#e0af00;
+  /* The five workhorses. Each carries a darker edge for button bottoms.
+     The green is held back deliberately — it is the colour of every
+     finished task and every primary button, and a neon one is exhausting
+     to look at all day. The rest are allowed to be loud. */
+  --green:#52b02c;    --green-dk:#3f8d1f;  --green-soft:#dcf3c9;
+  --blue:#0eaaf7;     --blue-dk:#0a8fd4;   --blue-soft:#d6f1ff;
+  --purple:#c86bff;   --purple-dk:#a247d6; --purple-soft:#f4e6ff;
+  --orange:#ff8c00;   --orange-dk:#dd7500; --orange-soft:#ffeacc;
+  --red:#ff3b3b;      --red-dk:#e51f1f;    --red-soft:#ffd9da;
+  --yellow:#ffc400;   --yellow-dk:#dfa900;
+
+  /* How much of a topic's colour washes its row. The old 9% was so faint
+     that four topics looked like one. */
+  --row-tint:17%;
 
   --accent:var(--green); --accent-dk:var(--green-dk); --on-accent:#ffffff;
   --done:var(--green);
@@ -54,16 +64,16 @@
   --e-back:cubic-bezier(.2,1.3,.4,1);
   --e-expo:cubic-bezier(.22,1,.36,1);
 
-  --topic-mix:62%;
+  --topic-mix:72%;
   --font:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --topic-mix:88%;
-    --ground:#131f24;   --ground-2:#0f191d;
-    --surface:#1b2a30;  --sunken:#16232a;  --raised:#20323a;
-    --ink:#f1f7fb;      --ink-2:#a9bdc7;   --ink-3:#6f8590;
-    --rule:#2e434d;     --rule-2:#3c5561;
+    --topic-mix:88%;    --row-tint:26%;
+    --ground:#111d22;   --ground-2:#0d171b;
+    --surface:#1c2c33;  --sunken:#16242a;  --raised:#22363e;
+    --ink:#f2f8fc;      --ink-2:#adc2cd;   --ink-3:#728a95;
+    --rule:#31474f;     --rule-2:#3f5a66;
     --green-soft:#1e3318; --blue-soft:#123243; --purple-soft:#2f2340;
     --orange-soft:#3a2a10; --red-soft:#3d1d1f;
     --sh-1:0 2px 0 var(--rule);
@@ -72,11 +82,11 @@
   }
 }
 :root[data-theme="dark"]{
-  --topic-mix:88%;
-  --ground:#131f24;   --ground-2:#0f191d;
-  --surface:#1b2a30;  --sunken:#16232a;  --raised:#20323a;
-  --ink:#f1f7fb;      --ink-2:#a9bdc7;   --ink-3:#6f8590;
-  --rule:#2e434d;     --rule-2:#3c5561;
+  --topic-mix:88%;    --row-tint:26%;
+  --ground:#111d22;   --ground-2:#0d171b;
+  --surface:#1c2c33;  --sunken:#16242a;  --raised:#22363e;
+  --ink:#f2f8fc;      --ink-2:#adc2cd;   --ink-3:#728a95;
+  --rule:#31474f;     --rule-2:#3f5a66;
   --green-soft:#1e3318; --blue-soft:#123243; --purple-soft:#2f2340;
   --orange-soft:#3a2a10; --red-soft:#3d1d1f;
   --sh-1:0 2px 0 var(--rule);
@@ -88,9 +98,19 @@
 }
 
 *{box-sizing:border-box}
+/* The shell is pinned to the viewport and nothing but `main` scrolls.
+   Letting the document itself scroll is what makes iOS Safari slide its
+   own toolbars in and out over the app, which drags the tab bar off the
+   bottom of the screen with them. Pinning it also stops the rubber-band
+   bounce at the ends of a list. */
+html{height:100%;-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font);
   font-size:16.5px;line-height:1.5;font-weight:600;-webkit-font-smoothing:antialiased;
-  overscroll-behavior:none}
+  position:fixed;inset:0;width:100%;height:100%;overflow:hidden;
+  overscroll-behavior:none;
+  /* No double-tap zoom. Taps register immediately rather than after the
+     300ms the browser would otherwise wait to see if a second one lands. */
+  touch-action:manipulation}
 button{font:inherit;color:inherit;cursor:pointer;font-family:var(--font)}
 :focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:8px}
 
@@ -103,8 +123,12 @@ h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wr
   color:var(--ink-3)}
 
 /* ═══════════ SHELL ═══════════ */
-.app{max-width:452px;margin:0 auto;min-height:100dvh;display:grid;
-  grid-template-rows:auto minmax(0,1fr) auto;background:var(--ground);position:relative}
+/* A definite height, not a minimum: with `min-height` the 1fr middle row
+   resolves against its content instead of the viewport, so a long list
+   pushes the whole column — tab bar included — past the bottom edge. */
+.app{max-width:452px;margin:0 auto;height:100%;display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;background:var(--ground);position:relative;
+  overflow:hidden}
 @media(min-width:453px){.app{border-inline:2px solid var(--rule)}}
 
 /* ═══════════ WALLPAPER ═══════════
@@ -117,8 +141,12 @@ h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wr
 .wall::after{content:'';position:absolute;inset:0;
   background:var(--ground);opacity:var(--wall-dim,.58)}
 .app.walled{background:transparent}
-.app.walled .tabbar{background:color-mix(in oklab,var(--surface) 88%,transparent);
-  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+/* These used to be backdrop-filter blurs. On iOS a blur is composited on
+   every frame of every scroll, which is most of what made the app feel
+   heavy — and text sitting inside one of those layers intermittently
+   renders as nothing at all. A more opaque flat fill looks near enough
+   and costs nothing. */
+.app.walled .tabbar{background:color-mix(in oklab,var(--surface) 94%,transparent)}
 .appbar,main,.tabbar{position:relative;z-index:1}
 
 /* The veil is the user's choice, and they are allowed to set it low. These
@@ -127,12 +155,10 @@ h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wr
    have solid backgrounds; this is everything that does not. */
 .app.walled .appbar{background:linear-gradient(to bottom,
   color-mix(in oklab,var(--ground) 72%,transparent),transparent)}
-.app.walled .ringmid{background:color-mix(in oklab,var(--ground) 74%,transparent);
-  padding:13px 19px;border-radius:22px;max-width:none;
-  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.app.walled .ringmid{background:color-mix(in oklab,var(--ground) 86%,transparent);
+  padding:13px 19px;border-radius:22px;max-width:none}
 .app.walled .greeting{display:table;margin-inline:auto;padding:6px 15px;border-radius:99px;
-  background:color-mix(in oklab,var(--ground) 72%,transparent);
-  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+  background:color-mix(in oklab,var(--ground) 84%,transparent)}
 .app.walled .groupline .label,
 .app.walled .groupline .tiny{color:var(--ink);
   text-shadow:0 0 10px var(--ground),0 0 4px var(--ground)}
@@ -176,17 +202,36 @@ h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wr
 .acctbanner .x:hover{opacity:1}
 @media (max-width:460px){.acctbanner .btn{width:100%}}
 
-main{overflow-y:auto;overflow-x:hidden;padding:0 16px 20px;position:relative}
+main{overflow-y:auto;overflow-x:hidden;padding:0 16px 20px;position:relative;
+  -webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 main::-webkit-scrollbar{width:0}
 
 .tabbar{display:flex;border-top:2px solid var(--rule);background:var(--surface);
   padding-bottom:env(safe-area-inset-bottom)}
+/* While the keyboard is up the tab bar is behind it anyway, and the room it
+   frees is room for the list you are typing into. */
+.kb .tabbar{display:none}
 .tabbtn{flex:1;background:none;border:none;display:flex;flex-direction:column;
   align-items:center;gap:3px;padding:11px 4px 10px;color:var(--ink-3);
   font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
   position:relative;white-space:nowrap;transition:color var(--t2) var(--e-out)}
-.tabbtn svg{width:24px;height:24px}
+.tabbtn svg{width:24px;height:24px;
+  transition:transform var(--t3) var(--e-back)}
 .tabbtn[aria-selected="true"]{color:var(--blue)}
+.tabbtn[aria-selected="true"] svg{transform:translateY(-2px) scale(1.12)}
+.tabbtn:active svg{transform:scale(.9)}
+/* The bar under the selected tab grows from the middle rather than
+   appearing, which is what makes switching read as movement. */
+.tabbtn::after{content:'';position:absolute;left:50%;bottom:0;height:3px;width:34px;
+  border-radius:99px 99px 0 0;background:var(--blue);
+  transform:translateX(-50%) scaleX(0);transform-origin:center;
+  transition:transform var(--t3) var(--e-back)}
+.tabbtn[aria-selected="true"]::after{transform:translateX(-50%) scaleX(1)}
+
+/* Anything tappable gets the same small give. */
+.iconbtn:active,.avatar:active,.mini:active,.selrow:active{transform:scale(.9)}
+.mini,.selrow{transition:transform var(--t1) var(--e-out),color var(--t2) var(--e-out),
+  border-color var(--t2) var(--e-out),background var(--t2) var(--e-out)}
 
 /* ═══════════ RING ═══════════ */
 .ringwrap{display:grid;place-items:center;padding:14px 0 8px}
@@ -212,12 +257,12 @@ main::-webkit-scrollbar{width:0}
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
 .row{display:flex;align-items:center;gap:12px;padding:14px 13px;position:relative;
   border-radius:16px;background:var(--surface);
-  border:2px solid color-mix(in oklab,var(--topic,var(--rule)) 40%,var(--rule));
+  border:2px solid color-mix(in oklab,var(--topic,var(--rule)) 55%,var(--rule));
   border-bottom-width:4px;
   transition:opacity var(--t3) var(--e-in),transform var(--t3) var(--e-in),
              background var(--t2) var(--e-out),border-color var(--t2) var(--e-out)}
 /* The topic tints the whole row, not a dot beside it. */
-.row{background:color-mix(in oklab,var(--topic,transparent) 9%,var(--surface))}
+.row{background:color-mix(in oklab,var(--topic,transparent) var(--row-tint),var(--surface))}
 .row-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
 .row-title{font-size:.97rem;font-weight:700;line-height:1.3;position:relative;
   word-break:break-word}
@@ -234,6 +279,31 @@ main::-webkit-scrollbar{width:0}
 
 .row.in{animation:rowIn var(--t4) var(--e-back)}
 @keyframes rowIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
+/* A row you can press should say so under the thumb. Transform only — it
+   runs on the compositor and costs nothing, which is the whole rule for
+   motion on a phone. */
+.row{transition:opacity var(--t3) var(--e-in),transform var(--t2) var(--e-out),
+     background var(--t2) var(--e-out),border-color var(--t2) var(--e-out)}
+.row:active{transform:scale(.985)}
+.row.done:active{transform:none}
+
+/* A paused task is still legible, just clearly not in play. */
+.row.held{opacity:.62;border-style:dashed;border-bottom-width:2px}
+.row.held .row-title{font-style:italic}
+
+/* Rows arrive in sequence rather than all at once. Six is enough to read
+   as a cascade; past that the wait would be longer than the payoff. */
+.list > .row{animation:rowIn var(--t4) var(--e-back) backwards}
+.list > .row:nth-child(1){animation-delay:0ms}
+.list > .row:nth-child(2){animation-delay:26ms}
+.list > .row:nth-child(3){animation-delay:52ms}
+.list > .row:nth-child(4){animation-delay:78ms}
+.list > .row:nth-child(5){animation-delay:104ms}
+.list > .row:nth-child(n+6){animation-delay:126ms}
+@media (prefers-reduced-motion:reduce){
+  .list > .row{animation:none}
+}
 .row.done{background:var(--sunken);border-color:var(--rule);opacity:.7}
 .row.done .row-title{color:var(--ink-2);text-decoration:line-through;
   text-decoration-thickness:2px}
@@ -296,8 +366,10 @@ main::-webkit-scrollbar{width:0}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .scrim.out{animation:fadeOut var(--t3) var(--e-in) forwards}
 @keyframes fadeOut{to{opacity:0}}
-.sheet{position:fixed;left:50%;transform:translateX(-50%);bottom:0;width:100%;
-  max-width:452px;max-height:93dvh;background:var(--ground);z-index:91;
+/* --kb is however much of the screen the on-screen keyboard is covering;
+   it is 0 everywhere that resizes the layout properly. */
+.sheet{position:fixed;left:50%;transform:translateX(-50%);bottom:var(--kb,0px);width:100%;
+  max-width:452px;max-height:calc(93dvh - var(--kb,0px));background:var(--ground);z-index:91;
   border-radius:22px 22px 0 0;box-shadow:var(--sh-3);display:flex;flex-direction:column;
   animation:sheetIn var(--t4) var(--e-std);padding-bottom:env(safe-area-inset-bottom);
   border:2px solid var(--rule);border-bottom:none}
@@ -315,7 +387,9 @@ main::-webkit-scrollbar{width:0}
 .field{display:flex;flex-direction:column;gap:7px}
 .field > label{font-size:.78rem;font-weight:800;color:var(--ink-2);text-transform:uppercase;
   letter-spacing:.06em}
-.input{width:100%;font-family:var(--font);font-size:.98rem;font-weight:700;padding:14px 14px;
+/* 16px is not a taste decision: iOS zooms the whole page in when you focus
+   a field with text smaller than that, and never quite zooms back out. */
+.input{width:100%;font-family:var(--font);font-size:16px;font-weight:700;padding:14px 14px;
   border-radius:14px;background:var(--sunken);border:2px solid var(--rule);color:var(--ink);
   transition:border-color var(--t2) var(--e-out),background var(--t2) var(--e-out)}
 .input::placeholder{color:var(--ink-3);font-weight:600}

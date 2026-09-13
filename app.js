@@ -9,18 +9,37 @@
      dark value is nudged up a little only where the hue loses punch against a
      dark ground. These are fills: borders, tints, dots, bars. Where a topic
      colour has to carry small text, the stylesheet mixes it toward the ink. */
+  /* Eighteen, round the wheel, each one loud enough to be recognised as
+     itself from across a room — a topic colour is data, and two topics you
+     have to squint at are two topics you stop using. The dark column is not
+     the same hex: a colour that sings on white goes muddy on a dark ground
+     unless it is lifted. Slate is the one deliberate exception, for the
+     topic somebody wants to disappear. */
   var SWATCHES = [
-    { id: 'green',  l: '#4ead2b', d: '#5cc134' },
-    { id: 'blue',   l: '#1cb0f6', d: '#31bcff' },
-    { id: 'purple', l: '#ce82ff', d: '#d493ff' },
-    { id: 'orange', l: '#ff9600', d: '#ffa424' },
-    { id: 'red',    l: '#ff4b4b', d: '#ff6262' },
-    { id: 'yellow', l: '#ffc800', d: '#ffd21f' },
-    { id: 'pink',   l: '#ff86d0', d: '#ff97d7' },
-    { id: 'teal',   l: '#00cdb3', d: '#0ee0c6' },
-    { id: 'indigo', l: '#6b7bf7', d: '#8290ff' },
-    { id: 'slate',  l: '#7c93a0', d: '#94aab6' }
+    { id: 'green',   l: '#4ead2b', d: '#63cc38' },
+    { id: 'lime',    l: '#86cc16', d: '#a3e635' },
+    { id: 'mint',    l: '#00c46a', d: '#1ed983' },
+    { id: 'teal',    l: '#00cdb3', d: '#14e0c6' },
+    { id: 'cyan',    l: '#00bcd9', d: '#22d3ee' },
+    { id: 'sky',     l: '#2aa5ff', d: '#4db6ff' },
+    { id: 'blue',    l: '#0eaaf7', d: '#31bcff' },
+    { id: 'indigo',  l: '#6366f1', d: '#818cf8' },
+    { id: 'violet',  l: '#9b5cff', d: '#b07dff' },
+    { id: 'purple',  l: '#ce82ff', d: '#d99bff' },
+    { id: 'magenta', l: '#ea45ce', d: '#fb69e3' },
+    { id: 'pink',    l: '#ff6fc4', d: '#ff8ed2' },
+    { id: 'rose',    l: '#ff4d7e', d: '#ff6f97' },
+    { id: 'red',     l: '#ff3b3b', d: '#ff6262' },
+    { id: 'coral',   l: '#ff6a3d', d: '#ff855e' },
+    { id: 'orange',  l: '#ff9600', d: '#ffab2e' },
+    { id: 'amber',   l: '#f0a500', d: '#ffc22e' },
+    { id: 'yellow',  l: '#ffc800', d: '#ffd93d' },
+    { id: 'slate',   l: '#7c93a0', d: '#94aab6' }
   ];
+  function swatch(id) {
+    return SWATCHES.filter(function (x) { return x.id === id; })[0];
+  }
+  var SW_FALLBACK = swatch('slate');
   function isDark() {
     var t = document.documentElement.getAttribute('data-theme');
     return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
@@ -29,7 +48,7 @@
                   plum: 'purple', rose: 'red', sand: 'orange', stone: 'slate' };
   function swatchColor(id) {
     id = RETIRED[id] || id;
-    var s = SWATCHES.filter(function (x) { return x.id === id; })[0] || SWATCHES[9];
+    var s = swatch(id) || SW_FALLBACK;
     return isDark() ? s.d : s.l;
   }
 
@@ -54,7 +73,7 @@
   function fresh() {
     return {
       name: '', avatar: '', dayStart: 4, theme: '', uid: 200,
-      wall: { k: 'none' }, wallDim: 58, onboarded: false,
+      wall: { k: 'none' }, wallDim: 58, onboarded: false, sound: true,
       topics: [
         { id: 't1', n: 'Personal',    sw: 'purple' },
         { id: 't2', n: 'Health',      sw: 'green'  },
@@ -80,6 +99,7 @@
   if (!S.history) S.history = [];
   if (!S.wall) S.wall = { k: 'none' };
   if (typeof S.wallDim !== 'number') S.wallDim = 58;
+  if (typeof S.sound !== 'boolean') S.sound = true;
 
   /* The build before this one seeded eight example tasks. If a device still
      has exactly those, with nothing finished and nothing of its own added,
@@ -157,7 +177,8 @@
     if (!S.day || S.day.key !== k) {
       S.day = { key: k, planned: false, tasks: [], done: [] };
       // Anything whose rule lands on this date is already in the day.
-      S.library.filter(function (t) { return dueOn(t, k); })
+      // A paused task keeps its rule and stops acting on it.
+      S.library.filter(function (t) { return !t.paused && dueOn(t, k); })
         .forEach(function (t) { S.day.tasks.push(t.id); });
       save();
     }
@@ -174,7 +195,66 @@
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
   }
-  function tick(ms) { try { if (navigator.vibrate) navigator.vibrate(ms || 10); } catch (e) {} }
+  /* ── Sound ───────────────────────────────────────────────
+     Synthesised on the spot rather than loaded — six short tones cost
+     nothing to ship, never wait on the network, and can be tuned by
+     changing a number instead of re-recording. They are deliberately
+     quiet, short, and pitched well above the voice range so they read as
+     feedback rather than as an alert.
+
+     iOS will not let a page make a sound until the person has touched it,
+     and refuses to build the audio context outside a gesture — so it is
+     built lazily, inside the first tap, which is what `tick` already is. */
+  var AC = null;
+  function audio() {
+    if (AC !== null) return AC;
+    try {
+      var Ctor = window.AudioContext || window.webkitAudioContext;
+      AC = Ctor ? new Ctor() : false;
+    } catch (e) { AC = false; }
+    return AC;
+  }
+  /* at: when, f: from, to: slide to, d: how long, g: how loud. */
+  var SOUNDS = {
+    tap:    { w: 'triangle', n: [{ f: 620, to: 720, d: .05,  g: .05 }] },
+    add:    { w: 'triangle', n: [{ f: 520, to: 880, d: .085, g: .06 }] },
+    done:   { w: 'sine',     n: [{ f: 680, to: 700, d: .08,  g: .07 },
+                                 { f: 1020, d: .16, g: .075, at: .055 }] },
+    undo:   { w: 'sine',     n: [{ f: 560, to: 340, d: .12,  g: .05 }] },
+    del:    { w: 'triangle', n: [{ f: 300, to: 180, d: .13,  g: .05 }] },
+    step:   { w: 'sine',     n: [{ f: 780, d: .07, g: .05 },
+                                 { f: 1040, d: .1, g: .05, at: .06 }] },
+    finale: { w: 'sine',     n: [{ f: 660, d: .5, g: .06 },
+                                 { f: 880, d: .5, g: .055, at: .09 },
+                                 { f: 1320, d: .55, g: .05, at: .18 }] }
+  };
+  function play(kind) {
+    if (!S || !S.sound) return;
+    var ac = audio(); if (!ac) return;
+    try {
+      if (ac.state === 'suspended') ac.resume();
+      var v = SOUNDS[kind] || SOUNDS.tap, t0 = ac.currentTime;
+      v.n.forEach(function (n) {
+        var o = ac.createOscillator(), g = ac.createGain();
+        var at = t0 + (n.at || 0), end = at + n.d;
+        o.type = v.w;
+        o.frequency.setValueAtTime(n.f, at);
+        if (n.to) o.frequency.exponentialRampToValueAtTime(n.to, end);
+        // Ramps rather than steps: a gain that jumps clicks audibly.
+        g.gain.setValueAtTime(.0001, at);
+        g.gain.exponentialRampToValueAtTime(n.g, at + .01);
+        g.gain.exponentialRampToValueAtTime(.0001, end);
+        o.connect(g); g.connect(ac.destination);
+        o.start(at); o.stop(end + .03);
+      });
+    } catch (e) {}
+  }
+  /* One call for both channels of feedback, so every place that already
+     buzzes also speaks, and neither can be forgotten at a new call site. */
+  function tick(ms, kind) {
+    try { if (navigator.vibrate) navigator.vibrate(ms || 10); } catch (e) {}
+    play(kind || 'tap');
+  }
   function el(h) { var d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; }
   var main = document.getElementById('main');
   var tab = 'today';
@@ -296,7 +376,15 @@
         '<svg viewBox="0 0 24 24"><path pathLength="1" d="M5 12.5l4.6 4.6L19 7"/></svg></button>' +
       '<span class="row-body"><span class="row-title">' + esc(t.t) + '</span>' +
       '<span class="row-sub"><b>' + esc(tp.n) + '</b>' + (r ? ' · ' + esc(r) : '') +
-      '</span></span></li>';
+      '</span></span>' +
+      /* Off today, not deleted. A repeating task lands here every morning
+         whether or not today is the day for it, and without this the only
+         way to clear one was to tick something you had not done. */
+      (done ? '' : '<button class="mini" data-act="off" type="button" ' +
+        'aria-label="Take ' + esc(t.t) + ' off today">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round"><path d="M6 12h12"/></svg></button>') +
+      '</li>';
   }
 
   /* ═══════════════════════════════════════════════════════
@@ -340,10 +428,33 @@
           '<button class="btn primary" id="add" type="button" style="margin-top:8px;max-width:250px">' +
             'Add something else</button></div>' + doneBlock;
     } else {
+      /* Grouped by topic rather than in the order things were added. Five
+         rows in five colours next to each other is a fruit salad; the same
+         five under their own headings is a plan. The heading only appears
+         when there is more than one topic in play. */
+      var groups = [], byTopic = {};
+      open.forEach(function (id) {
+        var t = lib(id), key = topic(t.top).id;
+        if (!byTopic[key]) { byTopic[key] = []; groups.push(key); }
+        byTopic[key].push(id);
+      });
+      groups.sort(function (a, b) {
+        return S.topics.map(function (x) { return x.id; }).indexOf(a) -
+               S.topics.map(function (x) { return x.id; }).indexOf(b); });
+      var openBlock = groups.length > 1
+        ? groups.map(function (key) {
+            return '<div class="groupline"><span class="label" style="color:' +
+              topColor(key) + '">' + esc(topic(key).n) + '</span>' +
+              '<span class="tiny">' + byTopic[key].length + '</span></div>' +
+              '<ul class="list">' +
+              byTopic[key].map(function (id) { return rowHtml(lib(id)); }).join('') +
+              '</ul>'; }).join('')
+        : '<ul class="list">' +
+          open.map(function (id) { return rowHtml(lib(id)); }).join('') + '</ul>';
+
       body.innerHTML =
         (open.length
-          ? '<ul class="list" id="openList">' +
-            open.map(function (id) { return rowHtml(lib(id)); }).join('') + '</ul>'
+          ? '<div id="openList">' + openBlock + '</div>'
           : '<div class="empty"><h3>Nothing left on today</h3>' +
             '<p class="small">Pick a few things from your list.</p></div>') +
         '<button class="btn quiet" id="add" type="button" style="margin-top:14px">' +
@@ -352,17 +463,36 @@
           (open.length ? 'Add more to today' : 'Choose today\u2019s tasks') + '</button>' +
         doneBlock;
       body.querySelectorAll('#openList .row').forEach(function (row) {
+        var id = Number(row.dataset.id);
         row.querySelector('.cbx').addEventListener('click', function (e) {
-          finish(row, Number(row.dataset.id), e.currentTarget); });
+          finish(row, id, e.currentTarget); });
+        row.querySelector('[data-act="off"]').addEventListener('click', function () {
+          offToday(id); });
       });
     }
 
     body.querySelectorAll('#doneList .row').forEach(function (row) {
       row.querySelector('.cbx').addEventListener('click', function () {
-        undoTask(Number(row.dataset.id)); tick(8); });
+        undoTask(Number(row.dataset.id)); tick(8, 'undo'); });
     });
     var addBtn = body.querySelector('#add');
     if (addBtn) addBtn.addEventListener('click', openPicker);
+  }
+
+  /* Off today, still in your list, still repeating tomorrow. Undoable,
+     because the button sits next to the one that finishes a task and a
+     mis-tap should never cost anything. */
+  function offToday(id) {
+    var t = lib(id); if (!t) return;
+    var at = S.day.tasks.indexOf(id);
+    if (at < 0) return;
+    S.day.tasks.splice(at, 1);
+    S.day.done = S.day.done.filter(function (x) { return x !== id; });
+    save(); tick(8, 'del'); render();
+    toast('Took “' + t.t + '” off today', function () {
+      if (S.day.tasks.indexOf(id) < 0) S.day.tasks.splice(at, 0, id);
+      save(); play('undo'); render();
+    });
   }
 
   function finish(row, id, cbx) {
@@ -370,7 +500,7 @@
     row.dataset.busy = '1';
     var t = lib(id);
     cbx.classList.add('on');
-    tick(12);
+    tick(12, 'done');
     sparks(cbx, main);
     var title = row.querySelector('.row-title');
     if (title && !title.querySelector('.strike')) {
@@ -439,8 +569,16 @@
   var filterTop = 'all';
   function renderTasks() {
     var items = S.library.filter(function (t) { return filterTop === 'all' || t.top === filterTop; });
-    var daily = items.filter(repeats);
-    var rest = items.filter(function (t) { return !repeats(t); });
+    /* Within each group, same-topic rows sit together. The list is tinted by
+       topic, so leaving it in the order things happened to be typed turns
+       the page into stripes; grouping the colours makes the same list read
+       as organised without taking any colour out of it. */
+    var order = S.topics.map(function (x) { return x.id; });
+    var byTopic = function (a, b) { return order.indexOf(a.top) - order.indexOf(b.top); };
+    var live = items.filter(function (t) { return !t.paused; });
+    var held = items.filter(function (t) { return !!t.paused; }).sort(byTopic);
+    var daily = live.filter(repeats).sort(byTopic);
+    var rest = live.filter(function (t) { return !repeats(t); }).sort(byTopic);
     var newTop = S.topics[0].id;
 
     main.innerHTML =
@@ -479,9 +617,16 @@
       (daily.length ? '<div class="groupline"><span class="label">Repeating</span>' +
         '<span class="tiny">' + daily.length + '</span></div><ul class="list">' +
         daily.map(libRow).join('') + '</ul>' : '') +
-      (rest.length ? '<div class="groupline"><span class="label">Pick from</span>' +
-        '<span class="tiny">' + rest.length + '</span></div><ul class="list">' +
-        rest.map(libRow).join('') + '</ul>' : '') +
+      '<div class="groupline" id="restHead"' + (rest.length ? '' : ' hidden') +
+        '><span class="label">Pick from</span>' +
+        '<span class="tiny" id="restCount">' + rest.length + '</span></div>' +
+      '<ul class="list" id="restList"' + (rest.length ? '' : ' hidden') + '>' +
+        rest.map(libRow).join('') + '</ul>' +
+      (held.length ? '<div class="groupline"><span class="label">Paused</span>' +
+        '<span class="tiny">' + held.length + '</span></div><ul class="list">' +
+        held.map(libRow).join('') + '</ul>' +
+        '<p class="tiny" style="margin-top:7px">These keep their repeat and stay ' +
+        'out of your days until you unpause them.</p>' : '') +
       (!items.length ? '<div class="empty"><h3>Nothing here yet</h3>' +
         '<p class="small">Add a task above and it will be waiting tomorrow morning.</p></div>' : '') +
       '<p class="note" style="margin-top:18px">Tap any task to set when it repeats — ' +
@@ -496,13 +641,37 @@
           x.setAttribute('aria-pressed', String(x.dataset.t === newTop)); });
       });
     });
+    /* Adding used to rebuild the whole page and then open the repeat editor
+       on top of it. Both of those take the keyboard down on a phone, which
+       makes emptying your head into the list — the single thing this app is
+       for — a stop-start business of tapping the field again between every
+       item. So the row is put in by hand, the field keeps its focus, and the
+       repeat choice waits until the row is tapped. */
     function add() {
       var v = input.value.trim(); if (!v) return;
       var nt = { id: nid(), t: v, top: newTop, rep: { k: 'none' } };
       S.library.unshift(nt);
-      save(); input.value = ''; renderTasks(); tick();
-      // Offer the repeat choice right after adding rather than burying it.
-      openTask(nt.id, true);
+      save(); input.value = ''; tick(10, 'add');
+
+      var host = document.getElementById('restList');
+      var head = document.getElementById('restHead');
+      if (!host || (filterTop !== 'all' && filterTop !== nt.top)) {
+        // Filtered out of the view it would land in, or the page is not in a
+        // shape that can take a row. Rebuild, and put the field back.
+        renderTasks();
+        var again = document.getElementById('newTask');
+        if (again) again.focus();
+        return;
+      }
+      var li = el(libRow(nt));
+      li.classList.add('in');
+      host.insertBefore(li, host.firstChild);
+      wireLibRow(li);
+      host.hidden = false; if (head) head.hidden = false;
+      var empty = main.querySelector('.empty');
+      if (empty) empty.remove();
+      var count = document.getElementById('restCount');
+      if (count) count.textContent = String(Number(count.textContent || 0) + 1);
     }
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
     document.getElementById('newGo').addEventListener('click', add);
@@ -510,33 +679,38 @@
     document.querySelectorAll('#filters .pick').forEach(function (b) {
       b.addEventListener('click', function () { filterTop = b.dataset.f; renderTasks(); }); });
 
-    main.querySelectorAll('.row[data-id]').forEach(function (row) {
-      var id = Number(row.dataset.id);
-      row.querySelector('[data-act="edit"]').addEventListener('click', function () {
-        openTask(id, false);
-      });
-      row.querySelector('[data-act="del"]').addEventListener('click', function () {
-        var t = lib(id), ix = S.library.indexOf(t);
-        S.library.splice(ix, 1);
-        S.libDel.push(id);
-        S.day.tasks = S.day.tasks.filter(function (x) { return x !== id; });
-        save(); renderTasks();
-        toast('Deleted “' + t.t + '”', function () {
-          S.library.splice(ix, 0, t);
-          S.libDel = S.libDel.filter(function (x) { return x !== id; });
-          save(); renderTasks(); });
-      });
+    main.querySelectorAll('.row[data-id]').forEach(wireLibRow);
+  }
+
+  /* Pulled out of renderTasks so a row added while you are typing can be
+     wired on its own, without rebuilding the page around the field. */
+  function wireLibRow(row) {
+    var id = Number(row.dataset.id);
+    row.querySelector('[data-act="edit"]').addEventListener('click', function () {
+      openTask(id, false);
+    });
+    row.querySelector('[data-act="del"]').addEventListener('click', function () {
+      var t = lib(id), ix = S.library.indexOf(t);
+      S.library.splice(ix, 1);
+      S.libDel.push(id);
+      S.day.tasks = S.day.tasks.filter(function (x) { return x !== id; });
+      save(); renderTasks();
+      toast('Deleted “' + t.t + '”', function () {
+        S.library.splice(ix, 0, t);
+        S.libDel = S.libDel.filter(function (x) { return x !== id; });
+        save(); renderTasks(); });
     });
   }
 
   function libRow(t) {
     var r = repLabel(t.rep);
-    return '<li class="row" data-id="' + t.id + '" style="--topic:' + topColor(t.top) + '">' +
+    return '<li class="row' + (t.paused ? ' held' : '') + '" data-id="' + t.id +
+      '" style="--topic:' + topColor(t.top) + '">' +
       '<button class="row-body" data-act="edit" type="button" style="background:none;border:none;' +
         'text-align:left;padding:0;font-family:var(--sans);align-items:flex-start">' +
         '<span class="row-title">' + esc(t.t) + '</span>' +
         '<span class="row-sub"><b>' + esc(topic(t.top).n) + '</b>' +
-        (r ? ' · ' + esc(r) : '') + '</span></button>' +
+        (r ? ' · ' + esc(r) : '') + (t.paused ? ' · paused' : '') + '</span></button>' +
       (r ? '<span class="mini" style="color:var(--topic);pointer-events:none" aria-hidden="true">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
         'stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a8 8 0 0113.5-3.5L20 8"/>' +
@@ -609,7 +783,7 @@
     }
 
     sheet('Topics', body(), function (sh) {
-      var chosenSw = SWATCHES[7].id;
+      var chosenSw = 'teal';
       function rewire() { sh.querySelector('.sheet-body').innerHTML = body(); wire(); }
       function wire() {
         sh.querySelectorAll('[data-edit]').forEach(function (b) {
@@ -687,7 +861,15 @@
       '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:10px;' +
         'display:flex;flex-direction:column;gap:6px">' +
         '<button class="btn primary" id="eSave" type="button">Save</button>' +
-        (isNew ? '' : '<button class="link" id="eDel" type="button">Delete this task</button>') +
+        (isNew ? '' :
+          /* Pausing is the answer to "I am not doing this for a while but I
+             am not giving up on it either" — the case where the only other
+             options were deleting something you want back later, or watching
+             it arrive every morning and ignoring it, which is how a list
+             stops being trusted. */
+          '<button class="btn quiet" id="ePause" type="button">' +
+            (t.paused ? 'Unpause this task' : 'Pause this task') + '</button>' +
+          '<button class="link" id="eDel" type="button">Delete this task</button>') +
       '</div>',
 
       function (sh, close) {
@@ -766,6 +948,24 @@
           save(); close(); tick(12);
           setTimeout(render, 60);
         });
+        var pause = sh.querySelector('#ePause');
+        if (pause) pause.addEventListener('click', function () {
+          t.paused = !t.paused;
+          if (t.paused) {
+            // Take it off today as well, or pausing changes nothing until
+            // tomorrow and looks broken.
+            S.day.tasks = S.day.tasks.filter(function (x) { return x !== t.id; });
+            S.day.done = S.day.done.filter(function (x) { return x !== t.id; });
+          } else if (dueOn(t, S.day.key) && S.day.tasks.indexOf(t.id) < 0) {
+            S.day.tasks.push(t.id);
+          }
+          save(); tick(8, t.paused ? 'del' : 'add'); close();
+          setTimeout(render, 60);
+          setTimeout(function () {
+            toast(t.paused ? '“' + t.t + '” is paused' : '“' + t.t + '” is back');
+          }, 300);
+        });
+
         var del = sh.querySelector('#eDel');
         if (del) del.addEventListener('click', function () {
           var ix = S.library.indexOf(t);
@@ -786,7 +986,8 @@
   /* ── Pick tasks for today ────────────────────────────── */
   function openPicker() {
     var chosen = {};
-    var avail = S.library.filter(function (t) { return S.day.tasks.indexOf(t.id) < 0; });
+    var avail = S.library.filter(function (t) {
+      return !t.paused && S.day.tasks.indexOf(t.id) < 0; });
     sheet('Add to today',
       (avail.length
         ? '<p class="tiny">Tap what you want to finish. Everything else stays on your list.</p>' +
@@ -866,25 +1067,42 @@
   }
 
   /* A phone photo is several megabytes and this document is pushed to the
-     server on every save, so it gets squeezed until it fits a budget. It is
-     going behind a veil at half opacity — sharpness was never the point. */
-  var WALL_BUDGET = 95000;
+     server on every save, so it gets squeezed until it fits a budget. The
+     first version of this aimed at 1100px and 95KB, which is fine on a
+     laptop and visibly blocky on a phone screen with three times the pixels
+     — so the ceiling is now high enough to survive one. WebP carries far
+     more detail per byte and every current phone browser can write it; the
+     check falls back to JPEG on anything that can't, because a canvas asked
+     for a format it does not have quietly hands back a PNG instead. */
+  var WALL_TYPE = (function () {
+    try {
+      var c = document.createElement('canvas'); c.width = c.height = 1;
+      return c.toDataURL('image/webp').indexOf('data:image/webp') === 0
+        ? 'image/webp' : 'image/jpeg';
+    } catch (e) { return 'image/jpeg'; }
+  })();
+  var WALL_BUDGET = 240000;
+  var WALL_EDGE = 1600;
   function shrinkWall(img, done) {
     var w = img.width, h = img.height;
-    var long = Math.max(w, h), scale = Math.min(1, 1100 / long);
+    var long = Math.max(w, h), scale = Math.min(1, WALL_EDGE / long);
     function attempt(sc, q) {
       var cv = document.createElement('canvas');
       cv.width = Math.max(Math.round(w * sc), 1);
       cv.height = Math.max(Math.round(h * sc), 1);
-      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
-      return cv.toDataURL('image/jpeg', q);
+      var cx = cv.getContext('2d');
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(img, 0, 0, cv.width, cv.height);
+      return cv.toDataURL(WALL_TYPE, q);
     }
-    var out = attempt(scale, 0.72);
-    var qs = [0.6, 0.5, 0.42];
+    var out = attempt(scale, 0.88);
+    var qs = [0.82, 0.76, 0.7, 0.64];
     for (var i = 0; i < qs.length && out.length > WALL_BUDGET; i++) out = attempt(scale, qs[i]);
-    while (out.length > WALL_BUDGET && scale > 0.2) {
-      scale *= 0.8;
-      out = attempt(scale, 0.5);
+    // Only once quality is as low as it should ever go does it start losing
+    // pixels, because scale is what you actually see on a big screen.
+    while (out.length > WALL_BUDGET && scale > 0.25) {
+      scale *= 0.85;
+      out = attempt(scale, 0.7);
     }
     done(out);
   }
@@ -1219,6 +1437,9 @@
       '<div class="switchrow"><span style="font-size:.9rem">Dark theme</span>' +
         '<button class="switch" id="themeSw" role="switch" aria-checked="' + isDark() +
         '"><span></span></button></div>' +
+      '<div class="switchrow"><span style="font-size:.9rem">Sounds</span>' +
+        '<button class="switch" id="soundSw" role="switch" aria-checked="' + !!S.sound +
+        '"><span></span></button></div>' +
       '<button class="link" id="wipe" type="button" style="margin-top:4px">Reset everything</button>',
 
       function (sh, close) {
@@ -1282,6 +1503,12 @@
           S.theme = next; save();
           this.setAttribute('aria-checked', String(next === 'dark'));
           render();
+        });
+        sh.querySelector('#soundSw').addEventListener('click', function () {
+          S.sound = !S.sound; save();
+          this.setAttribute('aria-checked', String(!!S.sound));
+          // Turning it on should make the sound it is promising.
+          if (S.sound) play('step');
         });
         sh.querySelector('#wipe').addEventListener('click', function () {
           if (!confirm('Clear all tasks, topics, history and settings?')) return;
@@ -1434,8 +1661,8 @@
             'aria-label="Add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
             'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">' +
             '<path d="M12 5.5v13M5.5 12h13"/></svg></button></div>' +
-        ideaHtml(kind) +
-        listHtml(kind) +
+        '<div id="wIdeas">' + ideaHtml(kind) + '</div>' +
+        '<div id="wList">' + listHtml(kind) + '</div>' +
         '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:14px;' +
           'margin-top:18px">' +
           '<button class="btn primary" id="wNext" type="button">' + c.next + '</button>' +
@@ -1453,7 +1680,7 @@
       save();
       if (closeSheet) closeSheet();
       tab = 'today';
-      setTimeout(function () { render(); paintWall(); tick(12); }, 90);
+      setTimeout(function () { render(); paintWall(); tick(12, 'finale'); }, 90);
     }
 
     function paint(sh) {
@@ -1464,34 +1691,52 @@
       wire(sh);
     }
 
+    /* Adding something must not touch the field you are typing into: on a
+       phone, replacing that element takes the keyboard down with it. So the
+       two parts that actually changed are redrawn and nothing else is. */
+    function refresh(sh) {
+      var kind = kindOf();
+      var ideas = sh.querySelector('#wIdeas'), list = sh.querySelector('#wList');
+      if (ideas) ideas.innerHTML = ideaHtml(kind);
+      if (list) list.innerHTML = listHtml(kind);
+      wirePieces(sh);
+    }
+
+    function wirePieces(sh) {
+      sh.querySelectorAll('[data-idea]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (addOne(b.dataset.idea, b.dataset.top)) { tick(8, 'add'); refresh(sh); } });
+      });
+      sh.querySelectorAll('[data-drop]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          dropOne(Number(b.dataset.drop)); refresh(sh); });
+      });
+    }
+
     function wire(sh) {
       var go = sh.querySelector('#wGo');
-      if (go) go.addEventListener('click', function () { step = 2; tick(8); paint(sh); });
+      if (go) go.addEventListener('click', function () { step = 2; tick(8, 'step'); paint(sh); });
       var skip = sh.querySelector('#wSkip');
       if (skip) skip.addEventListener('click', function () { if (closeSheet) closeSheet(); });
 
       var input = sh.querySelector('#wIn');
       if (input) {
         var commit = function () {
-          if (addOne(input.value)) { tick(8); paint(sh); sh.querySelector('#wIn').focus(); }
-          else input.value = '';
+          if (addOne(input.value)) { tick(8, 'add'); refresh(sh); }
+          input.value = '';
+          // The field is the same element it was a moment ago, so the
+          // keyboard never went anywhere.
         };
         input.addEventListener('keydown', function (e) {
           if (e.key === 'Enter') { e.preventDefault(); commit(); } });
-        sh.querySelector('#wAdd').addEventListener('click', commit);
+        sh.querySelector('#wAdd').addEventListener('click', function () {
+          commit(); input.focus(); });
       }
-      sh.querySelectorAll('[data-idea]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          if (addOne(b.dataset.idea, b.dataset.top)) { tick(8); paint(sh); } });
-      });
-      sh.querySelectorAll('[data-drop]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          dropOne(Number(b.dataset.drop)); paint(sh); });
-      });
+      wirePieces(sh);
 
       var next = sh.querySelector('#wNext');
       if (next) next.addEventListener('click', function () {
-        if (step === 2) { step = 3; tick(8); paint(sh); } else finish(); });
+        if (step === 2) { step = 3; tick(8, 'step'); paint(sh); } else finish(); });
       var skipStep = sh.querySelector('#wSkipStep');
       if (skipStep) skipStep.addEventListener('click', function () {
         if (step === 2) { step = 3; paint(sh); } else finish(); });
@@ -1508,7 +1753,8 @@
     if (S.day.planned) return;
     var late = new Date().getHours() >= 14;
     var chosen = {}, capSel = null;
-    var avail = S.library.filter(function (t) { return S.day.tasks.indexOf(t.id) < 0; });
+    var avail = S.library.filter(function (t) {
+      return !t.paused && S.day.tasks.indexOf(t.id) < 0; });
 
     sheet(late ? 'Shape the rest of the day?' : 'Good morning',
       '<p class="tiny">' + (late
@@ -1566,7 +1812,7 @@
           S.day.planned = true; save(); close();
           setTimeout(renderToday, 60);
         }
-        go.addEventListener('click', function () { tick(12); done(); });
+        go.addEventListener('click', function () { tick(12, 'step'); done(); });
         sh.querySelector('#skip').addEventListener('click', function () { chosen = {}; done(); });
       });
   }
@@ -1591,9 +1837,39 @@
     document.querySelectorAll('.tabbtn').forEach(function (b) {
       if (b.dataset.tab === tab) b.setAttribute('aria-selected', 'true');
       else b.removeAttribute('aria-selected'); });
-    if (!reduce) main.animate([{ opacity: 0 }, { opacity: 1 }],
-      { duration: 120, easing: 'cubic-bezier(0,0,.38,.9)' });
+    // There used to be a 120ms opacity animation on the whole of main here.
+    // It promoted the entire scroll container to its own layer on every
+    // single render, which on a phone is the difference between a tab
+    // switch that lands instantly and one that visibly lags. The rows
+    // animate themselves in; the container does not need to.
+    main.scrollTop = 0;
   }
+  /* iOS does not resize the layout when the keyboard opens — it shrinks the
+     visual viewport and leaves the layout the same size underneath. So a
+     shell pinned to the layout viewport puts everything anchored to the
+     bottom, including the field you are typing into, behind the keyboard.
+     This measures the difference and lets the CSS lift the sheet clear of
+     it. On anything that resizes properly the number is always zero and
+     none of it does anything. */
+  if (window.visualViewport) {
+    var vv = window.visualViewport;
+    var applyKb = function () {
+      var gap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      document.documentElement.style.setProperty('--kb', gap + 'px');
+      document.documentElement.classList.toggle('kb', gap > 90);
+    };
+    vv.addEventListener('resize', applyKb);
+    vv.addEventListener('scroll', applyKb);
+    applyKb();
+  }
+
+  /* Safari's own pinch gesture, which zooms the page rather than anything in
+     it — on a fixed app shell that only ever leaves you looking at a corner
+     of it with no way back except reloading. The browser's text size setting
+     and the system zoom both still work. */
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
+
   document.querySelectorAll('.tabbtn').forEach(function (b) {
     b.addEventListener('click', function () { tab = b.dataset.tab; tick(8); render(); }); });
   document.getElementById('profileBtn').addEventListener('click', openProfile);
