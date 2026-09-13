@@ -185,6 +185,28 @@ the front.
 
 ---
 
+## What people see the first time they open the link
+
+Two things are easy to mistake for bugs the first time you see them — they're not.
+
+**A handful of tasks are already there.** Every brand-new copy of the app — yours,
+and everyone you send the link to — starts with the same small built-in list
+(Morning meds, Walk the dog, Bins out, and a few more) instead of a blank screen.
+They're not synced from anywhere; they're just examples baked into a fresh
+install, and they're free to delete.
+
+**It doesn't ask you to sign in.** The app is offline-first on purpose — it works
+immediately with no account, and syncing is optional. Once `config.js` is filled
+in, the *first time* someone opens the app on a device where they aren't signed
+in, a blue banner appears above today's circle: "Create a free account and your
+list follows you to your other devices." It has a **Create account** button that
+opens straight to the sign-up form, and a small **×** to dismiss it. It shows
+exactly once per device — it won't come back after it's dismissed, and it never
+comes back at all once that device is signed in. Sign-in itself always lives at
+the avatar, top right, whether or not the banner is still showing.
+
+---
+
 ## How sync behaves
 
 Worth knowing before you rely on it.

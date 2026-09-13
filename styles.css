@@ -159,6 +159,23 @@ h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wr
 .avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .avatar.signed{border-color:var(--green)}
 
+/* ═══════════ ACCOUNT BANNER ═══════════
+   Shown once, only when sync is switched on for this build and nobody has
+   signed in yet. The account fields live inside a menu most people never
+   open on their own — this is the one nudge toward them, and it never
+   comes back once it has been dismissed or an account exists. */
+.acctbanner{margin:0 16px 4px;padding:12px 38px 12px 14px;border-radius:16px;
+  background:var(--blue-soft);border:2px solid var(--blue);
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;position:relative;z-index:1;
+  animation:toastIn var(--t4) var(--e-back)}
+.acctbanner p{margin:0;flex:1 1 200px;font-size:.86rem;font-weight:700;color:var(--blue-dk)}
+.acctbanner .btn{width:auto;padding:10px 14px;font-size:.8rem;flex-shrink:0}
+.acctbanner .x{background:none;border:none;color:var(--blue-dk);opacity:.6;
+  padding:6px;display:grid;place-items:center;position:absolute;top:8px;right:8px}
+.acctbanner .x svg{width:16px;height:16px}
+.acctbanner .x:hover{opacity:1}
+@media (max-width:460px){.acctbanner .btn{width:100%}}
+
 main{overflow-y:auto;overflow-x:hidden;padding:0 16px 20px;position:relative}
 main::-webkit-scrollbar{width:0}
 

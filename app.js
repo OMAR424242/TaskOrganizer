@@ -176,6 +176,40 @@
     setTimeout(function () { t.remove(); }, 210);
   }
 
+  /* ── Account banner ─────────────────────────────────────────────
+     The account fields live inside a menu almost nobody opens on their
+     own, so a build with sync switched on gets one quiet nudge toward
+     it — shown once, gone for good the moment it is dismissed or an
+     account exists, and never a dialog you have to clear before you can
+     see today. */
+  var BANNER_KEY = 'onething.bannerSeen';
+  function acctBanner() {
+    var host = document.getElementById('acctBanner');
+    if (!host) return;
+    var sy = window.OTSync;
+    var seen = false;
+    try { seen = !!localStorage.getItem(BANNER_KEY); } catch (e) {}
+    if (!sy || !sy.configured || sy.signedIn || seen) { host.classList.add('hidden'); return; }
+    host.classList.remove('hidden');
+    host.innerHTML =
+      '<p>Create a free account and your list follows you to your other devices.</p>' +
+      '<button class="btn blue" type="button" id="bannerGo">Create account</button>' +
+      '<button class="x" type="button" id="bannerX" aria-label="Dismiss">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" ' +
+      'stroke-linecap="round"><path d="M5 19L19 5M5 5l14 14"/></svg></button>';
+    host.querySelector('#bannerX').addEventListener('click', dismissBanner);
+    host.querySelector('#bannerGo').addEventListener('click', function () {
+      dismissBanner();
+      authMode = 'up';
+      openProfile();
+    });
+  }
+  function dismissBanner() {
+    try { localStorage.setItem(BANNER_KEY, '1'); } catch (e) {}
+    var host = document.getElementById('acctBanner');
+    if (host) host.classList.add('hidden');
+  }
+
   /* `colours` holds one hex per finished segment. The ring ends the day as a
      picture of what the day was made of, rather than a uniform green bar. */
   function ringSvg(total, colours, px) {
@@ -1348,6 +1382,7 @@
     });
     OTSync.onChange(function (sy) {
       topAvatar();
+      acctBanner();
       var sheetOpen = document.querySelector('.sheet');
       var dot = sheetOpen && sheetOpen.querySelector('.syncdot');
       if (dot) {
@@ -1363,5 +1398,6 @@
   topAvatar();
   render();
   paintWall();
+  acctBanner();
   setTimeout(morning, 400);
 })();
