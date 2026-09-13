@@ -49,12 +49,10 @@ Use one of these:
 Create a repo at [github.com/new](https://github.com/new) named `one-thing`,
 **Public** (Pages needs this on a free account), and **don't** tick "Add a README".
 
-Then, in this folder:
+This folder is already a git repo with the history in it, so you only need to
+point it at yours and push:
 
 ```bash
-git init
-git add .
-git commit -m "One Thing"
 git branch -M main
 git remote add origin https://github.com/YOUR-USERNAME/one-thing.git
 git push -u origin main
