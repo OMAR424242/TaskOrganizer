@@ -57,7 +57,10 @@
   --sh-3:0 10px 32px rgba(0,0,0,.16);
 
   /* Motion — tight. Fast is most of what "feels good" means. */
-  --t1:60ms; --t2:110ms; --t3:170ms; --t4:240ms; --t5:340ms;
+  /* Tightened across the board after the app was called sluggish on a
+     phone. Nothing here was wrong, exactly — it was just all a frame or
+     two longer than it needed to be, and that adds up over a day. */
+  --t1:55ms; --t2:95ms; --t3:145ms; --t4:200ms; --t5:290ms;
   --e-out:cubic-bezier(0,0,.38,.9);
   --e-in:cubic-bezier(.3,0,1,.9);
   --e-std:cubic-bezier(.2,0,0,1);
@@ -292,17 +295,19 @@ main::-webkit-scrollbar{width:0}
 .row.held{opacity:.62;border-style:dashed;border-bottom-width:2px}
 .row.held .row-title{font-style:italic}
 
-/* Rows arrive in sequence rather than all at once. Six is enough to read
-   as a cascade; past that the wait would be longer than the payoff. */
-.list > .row{animation:rowIn var(--t4) var(--e-back) backwards}
-.list > .row:nth-child(1){animation-delay:0ms}
-.list > .row:nth-child(2){animation-delay:26ms}
-.list > .row:nth-child(3){animation-delay:52ms}
-.list > .row:nth-child(4){animation-delay:78ms}
-.list > .row:nth-child(5){animation-delay:104ms}
-.list > .row:nth-child(n+6){animation-delay:126ms}
+/* Rows arrive in sequence — but only when you have arrived at the tab.
+   Running this on every redraw meant every added or removed task made the
+   whole list blink and restart, which is not animation, it is a glitch.
+   `main.enter` is on for exactly one render. */
+main.enter .list > .row{animation:rowIn 190ms var(--e-out) backwards}
+main.enter .list > .row:nth-child(1){animation-delay:0ms}
+main.enter .list > .row:nth-child(2){animation-delay:22ms}
+main.enter .list > .row:nth-child(3){animation-delay:44ms}
+main.enter .list > .row:nth-child(4){animation-delay:66ms}
+main.enter .list > .row:nth-child(n+5){animation-delay:84ms}
+main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
 @media (prefers-reduced-motion:reduce){
-  .list > .row{animation:none}
+  main.enter .list > .row,main.enter > *{animation:none}
 }
 .row.done{background:var(--sunken);border-color:var(--rule);opacity:.7}
 .row.done .row-title{color:var(--ink-2);text-decoration:line-through;

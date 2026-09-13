@@ -123,11 +123,31 @@
     // Anyone already carrying a list of their own has been through this.
     S.onboarded = S.library.length > 0 || S.history.length > 0;
   }
+  /* The whole document goes to localStorage as one string, and that document
+     can be carrying a wallpaper — a hundred kilobytes and more of base64.
+     Doing that between a key going down and the row appearing is most of why
+     adding a task felt heavy on a phone. The write is coalesced and pushed
+     off the end of the interaction instead; anything that could lose it
+     flushes first, so nothing is ever risked for the sake of it. */
+  var saveT = null, unsaved = false;
+  function flushSave() {
+    if (!unsaved) return;
+    unsaved = false;
+    if (saveT) { clearTimeout(saveT); saveT = null; }
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  }
   function save() {
     S.rev = Date.now();
-    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+    unsaved = true;
+    if (saveT) clearTimeout(saveT);
+    saveT = setTimeout(flushSave, 80);
     if (window.OTSync) OTSync.touch();
   }
+  window.addEventListener('pagehide', flushSave);
+  window.addEventListener('beforeunload', flushSave);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) flushSave();
+  });
   if (S.theme) document.documentElement.setAttribute('data-theme', S.theme);
 
   /* ── Repeat rules ──────────────────────────────────────
@@ -205,7 +225,7 @@
      iOS will not let a page make a sound until the person has touched it,
      and refuses to build the audio context outside a gesture — so it is
      built lazily, inside the first tap, which is what `tick` already is. */
-  var AC = null;
+  var AC = null, silentEl = null;
   function audio() {
     if (AC !== null) return AC;
     try {
@@ -214,6 +234,55 @@
     } catch (e) { AC = false; }
     return AC;
   }
+
+  /* Why a page that plainly called play() still made no sound on a phone:
+     iOS treats Web Audio as an alert by default, and the ring/silent switch
+     silences alerts. Almost everybody leaves that switch on silent, so the
+     app was mute for almost everybody.
+
+     Two things fix it, and both have to happen inside a real gesture.
+     `audioSession.type = 'playback'` is the modern answer and says this is
+     media, not a notification. Before that existed, the rule only lifted
+     once a media element had played — so a generated silent clip is played
+     once, which costs nothing and is the difference between sound and no
+     sound on an older phone. */
+  function silentClip() {
+    if (silentEl) return silentEl;
+    try {
+      var n = 800, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf), i = 0;
+      function s(str) { for (var j = 0; j < str.length; j++) v.setUint8(i++, str.charCodeAt(j)); }
+      function u32(x) { v.setUint32(i, x, true); i += 4; }
+      function u16(x) { v.setUint16(i, x, true); i += 2; }
+      s('RIFF'); u32(36 + n * 2); s('WAVE'); s('fmt '); u32(16); u16(1); u16(1);
+      u32(8000); u32(16000); u16(2); u16(16); s('data'); u32(n * 2);
+      silentEl = new Audio(URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+      silentEl.setAttribute('playsinline', '');
+      silentEl.volume = 0.001;
+    } catch (e) { silentEl = false; }
+    return silentEl;
+  }
+
+  var audioReady = false;
+  function unlockAudio() {
+    if (audioReady) return;
+    var ac = audio(); if (!ac) { audioReady = true; return; }
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    try {
+      if (ac.state === 'suspended') ac.resume();
+      var src0 = ac.createBufferSource();
+      src0.buffer = ac.createBuffer(1, 1, 22050);
+      src0.connect(ac.destination); src0.start(0);
+    } catch (e) {}
+    try {
+      var el = silentClip();
+      if (el) { var pr = el.play(); if (pr && pr.catch) pr.catch(function () {}); }
+    } catch (e) {}
+    audioReady = true;
+  }
+  // Every route in: a tap, a key, or the first touch of the screen.
+  ['pointerdown', 'touchend', 'keydown'].forEach(function (ev) {
+    document.addEventListener(ev, unlockAudio, { capture: true, passive: true });
+  });
   /* at: when, f: from, to: slide to, d: how long, g: how loud. */
   var SOUNDS = {
     tap:    { w: 'triangle', n: [{ f: 620, to: 720, d: .05,  g: .05 }] },
@@ -232,8 +301,12 @@
     if (!S || !S.sound) return;
     var ac = audio(); if (!ac) return;
     try {
+      unlockAudio();
       if (ac.state === 'suspended') ac.resume();
-      var v = SOUNDS[kind] || SOUNDS.tap, t0 = ac.currentTime;
+      // A hair of lookahead. Scheduling exactly at currentTime is scheduling
+      // in the past by the time the graph runs, and the attack gets clipped
+      // — which reads as a click, or as nothing at all.
+      var v = SOUNDS[kind] || SOUNDS.tap, t0 = ac.currentTime + .012;
       v.n.forEach(function (n) {
         var o = ac.createOscillator(), g = ac.createGain();
         var at = t0 + (n.at || 0), end = at + n.d;
@@ -392,6 +465,11 @@
      ═══════════════════════════════════════════════════════ */
   function renderToday() {
     ensureDay();
+    /* Replacing main's contents collapses its scroll height for an instant,
+       and the browser pins scrollTop to 0 on the way through. Every add,
+       every removal, every tick was quietly scrolling you back to the top of
+       a long list. Put it back where it was. */
+    var keepY = main.scrollTop;
     var open = openIds(), total = dayTotal(), done = total - open.length;
     var clear = total > 0 && open.length === 0;
     var doneList = S.day.done.filter(function (id) { return lib(id); });
@@ -477,6 +555,7 @@
     });
     var addBtn = body.querySelector('#add');
     if (addBtn) addBtn.addEventListener('click', openPicker);
+    if (keepY) main.scrollTop = keepY;
   }
 
   /* Off today, still in your list, still repeating tomorrow. Undoable,
@@ -509,6 +588,7 @@
     row.classList.add('done');
 
     S.day.done.push(id);
+    if (!repeats(t)) t.doneAt = S.day.key;
     S.history.push({ hid: 'h' + Date.now() + Math.random().toString(36).slice(2, 5),
                      taskId: id, t: t.t, top: t.top, day: S.day.key, at: Date.now() });
     save();
@@ -519,15 +599,20 @@
 
     // The row slides out of the open list and comes back, checked, under Done.
     // It is never simply gone.
+    // 350ms used to pass between ticking something and the list moving on.
+    // Long enough to see the line drawn through it was the intent; long
+    // enough to feel like waiting was the result. 230 still reads.
     setTimeout(function () {
       row.classList.add('out');
       setTimeout(function () {
         if (left === 0 && total > 0) finale(); else renderToday();
-      }, reduce ? 0 : 165);
-    }, reduce ? 0 : 185);
+      }, reduce ? 0 : 110);
+    }, reduce ? 0 : 120);
   }
 
   function undoTask(id) {
+    var back = lib(id);
+    if (back) delete back.doneAt;
     S.day.done = S.day.done.filter(function (x) { return x !== id; });
     for (var i = S.history.length - 1; i >= 0; i--) {
       if (S.history[i].taskId === id && S.history[i].day === S.day.key) {
@@ -568,7 +653,13 @@
      ═══════════════════════════════════════════════════════ */
   var filterTop = 'all';
   function renderTasks() {
-    var items = S.library.filter(function (t) { return filterTop === 'all' || t.top === filterTop; });
+    var keepY = main.scrollTop;
+    var items = S.library.filter(function (t) {
+      // A one-off you have finished is finished. It stays in your history and
+      // in today's Done list, and stops sitting in the list of things to do,
+      // which is the only place it was ever noise.
+      if (t.doneAt && !repeats(t)) return false;
+      return filterTop === 'all' || t.top === filterTop; });
     /* Within each group, same-topic rows sit together. The list is tinted by
        topic, so leaving it in the order things happened to be typed turns
        the page into stripes; grouping the colours makes the same list read
@@ -680,6 +771,7 @@
       b.addEventListener('click', function () { filterTop = b.dataset.f; renderTasks(); }); });
 
     main.querySelectorAll('.row[data-id]').forEach(wireLibRow);
+    if (keepY) main.scrollTop = keepY;
   }
 
   /* Pulled out of renderTasks so a row added while you are typing can be
@@ -987,7 +1079,8 @@
   function openPicker() {
     var chosen = {};
     var avail = S.library.filter(function (t) {
-      return !t.paused && S.day.tasks.indexOf(t.id) < 0; });
+      return !t.paused && !(t.doneAt && !repeats(t)) &&
+             S.day.tasks.indexOf(t.id) < 0; });
     sheet('Add to today',
       (avail.length
         ? '<p class="tiny">Tap what you want to finish. Everything else stays on your list.</p>' +
@@ -1754,7 +1847,8 @@
     var late = new Date().getHours() >= 14;
     var chosen = {}, capSel = null;
     var avail = S.library.filter(function (t) {
-      return !t.paused && S.day.tasks.indexOf(t.id) < 0; });
+      return !t.paused && !(t.doneAt && !repeats(t)) &&
+             S.day.tasks.indexOf(t.id) < 0; });
 
     sheet(late ? 'Shape the rest of the day?' : 'Good morning',
       '<p class="tiny">' + (late
@@ -1837,12 +1931,23 @@
     document.querySelectorAll('.tabbtn').forEach(function (b) {
       if (b.dataset.tab === tab) b.setAttribute('aria-selected', 'true');
       else b.removeAttribute('aria-selected'); });
-    // There used to be a 120ms opacity animation on the whole of main here.
-    // It promoted the entire scroll container to its own layer on every
-    // single render, which on a phone is the difference between a tab
-    // switch that lands instantly and one that visibly lags. The rows
-    // animate themselves in; the container does not need to.
+  }
+
+  /* Arriving at a tab is worth a little theatre; redrawing the one you are
+     already looking at is not — run the cascade every time and adding a task
+     makes the whole list flicker and jump. So the class that carries the
+     animation is put on for one render, and the scroll goes to the top only
+     because you have genuinely gone somewhere else. */
+  function goTab(next) {
+    if (next === tab) return;
+    tab = next;
+    tick(8, 'step');
+    main.classList.remove('enter');
+    void main.offsetWidth;            // let the class actually leave first
     main.scrollTop = 0;
+    render();
+    main.classList.add('enter');
+    setTimeout(function () { main.classList.remove('enter'); }, 420);
   }
   /* iOS does not resize the layout when the keyboard opens — it shrinks the
      visual viewport and leaves the layout the same size underneath. So a
@@ -1871,7 +1976,7 @@
   document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
 
   document.querySelectorAll('.tabbtn').forEach(function (b) {
-    b.addEventListener('click', function () { tab = b.dataset.tab; tick(8); render(); }); });
+    b.addEventListener('click', function () { goTab(b.dataset.tab); }); });
   document.getElementById('profileBtn').addEventListener('click', openProfile);
   document.getElementById('themeBtn').addEventListener('click', function () {
     var next = isDark() ? 'light' : 'dark';
