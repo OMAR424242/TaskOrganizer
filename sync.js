@@ -117,6 +117,28 @@ window.OTSync = (function () {
     return m;
   }
 
+  /* Are these two documents the same to look at? Keys are sorted so that two
+     documents built in a different order still compare equal — the merged
+     one is rebuilt from scratch, so its keys never come out in the order the
+     local one's did — and `rev` is dropped because it is a clock, not
+     content. */
+  function canon(v) {
+    if (Array.isArray(v)) return v.map(canon);
+    if (v && typeof v === 'object') {
+      var out = {};
+      Object.keys(v).sort().forEach(function (k) {
+        if (k !== 'rev') out[k] = canon(v[k]); });
+      return out;
+    }
+    return v;
+  }
+  function same(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    try { return JSON.stringify(canon(a)) === JSON.stringify(canon(b)); }
+    catch (e) { return false; }
+  }
+
   function merge(local, remote) {
     if (!remote) return local;
     if (!local) return remote;
@@ -243,7 +265,13 @@ window.OTSync = (function () {
       return pull().then(function (remote) {
         var local = host.get();
         var merged = merge(local, remote);
-        if (remote) host.set(merged);
+        // Handing the app a document means a full repaint, and a repaint
+        // takes the field someone is typing into — and the keyboard with it
+        // — out from under them. On a single device the answer that comes
+        // back is almost always the copy this device pushed a moment ago, so
+        // the merge equals what we already had and there is nothing to tell
+        // anyone about. Compare first; say nothing unless it actually moved.
+        if (remote && !same(local, merged)) host.set(merged);
         return push(merged);
       }).then(function () {
         setStatus('on');

@@ -2047,12 +2047,60 @@
       : 'You and your stats');
   }
   function render() {
+    /* If a field is on the page and focused, carry its contents and caret
+       across the rebuild. This cannot bring an iOS keyboard back on its own
+       — only a gesture does that — which is why the sync path waits instead;
+       but for every other repaint it means a half-typed word survives. */
+    var act = document.activeElement;
+    var fid = act && act.id &&
+      (act.tagName === 'INPUT' || act.tagName === 'TEXTAREA') ? act.id : null;
+    var fval = null, fs = null, fe = null;
+    if (fid) {
+      fval = act.value;
+      try { fs = act.selectionStart; fe = act.selectionEnd; } catch (e) {}
+    }
+
     if (tab === 'today') renderToday(); else renderTasks();
     paintWall();
+
+    if (fid) {
+      var back = document.getElementById(fid);
+      if (back && back !== act) {
+        if (fval !== null && back.value !== undefined) back.value = fval;
+        try {
+          back.focus({ preventScroll: true });
+          if (fs !== null && back.setSelectionRange) back.setSelectionRange(fs, fe);
+        } catch (e) {}
+      }
+    }
     document.querySelectorAll('.tabbtn').forEach(function (b) {
       if (b.dataset.tab === tab) b.setAttribute('aria-selected', 'true');
       else b.removeAttribute('aria-selected'); });
   }
+
+  /* A repaint that arrives from somewhere other than a tap — a sync landing,
+     another device's change — must never interrupt someone mid-sentence. On
+     a phone, replacing a focused field takes the keyboard down with it and
+     loses whatever was half typed, and no amount of putting the focus back
+     afterwards brings the keyboard up again: iOS only opens it inside a real
+     gesture. So the repaint waits until the field is let go. */
+  var pendingRender = false;
+  function typing() {
+    var el = document.activeElement;
+    return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+  }
+  function renderWhenFree() {
+    if (typing()) { pendingRender = true; return; }
+    pendingRender = false;
+    render();
+  }
+  document.addEventListener('focusout', function () {
+    if (!pendingRender) return;
+    // A tab of focus from one field to another is not finishing.
+    setTimeout(function () {
+      if (pendingRender && !typing()) { pendingRender = false; render(); }
+    }, 80);
+  }, true);
 
   /* Arriving at a tab is worth a little theatre; redrawing the one you are
      already looking at is not — run the cascade every time and adding a task
@@ -2120,7 +2168,7 @@
         if (S.theme) document.documentElement.setAttribute('data-theme', S.theme);
         ensureDay();
         topAvatar();
-        render();
+        renderWhenFree();
       }
     });
     OTSync.onChange(function (sy) {
