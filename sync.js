@@ -169,7 +169,6 @@ window.OTSync = (function () {
     // otherwise the newer one simply has the right answer.
     var ld = local.day, rd = remote.day;
     if (ld && rd && ld.key === rd.key) {
-      var done = idset(ld.done, rd.done);
       /* The day's tasks are a union, which on its own can only ever add —
          so taking something off today never survived a sync, on any number
          of devices. `pick` carries a stamped decision per task, on or off,
@@ -186,13 +185,26 @@ window.OTSync = (function () {
         key: ld.key,
         tasks: uniq(ld.tasks, rd.tasks, function (x) { return x; })
           .filter(function (x) { return !(pick[x] && pick[x][1] === 0); }),
-        done: Object.keys(done).map(Number),
+        done: [],
         pick: pick,
         planned: !!(ld.planned || rd.planned),
         cap: (base.day && base.day.cap) || ld.cap || rd.cap || null
       };
-      // Nothing can be marked done that isn't on the day.
-      out.day.done = out.day.done.filter(function (x) { return out.day.tasks.indexOf(x) >= 0; });
+
+      /* What is finished today is not merged as a set either, and for the
+         same reason: a union can only add, so unticking something could
+         never win — the other copy still had it done, and the tick came
+         straight back. It is not given its own tombstones though, because
+         there is already something that knows exactly this: the history,
+         which merges losslessly and whose undo tombstones are honoured a
+         few lines above. So the day's done list is read back out of the
+         merged history rather than being merged itself. One source of
+         truth, and unticking works everywhere by construction. */
+      var fromHistory = {};
+      out.history.forEach(function (h) {
+        if (h && h.day === ld.key && h.taskId !== undefined) fromHistory[h.taskId] = 1; });
+      out.day.done = Object.keys(fromHistory).map(Number)
+        .filter(function (x) { return out.day.tasks.indexOf(x) >= 0; });
     }
 
     out.rev = Math.max(local.rev || 0, remote.rev || 0);

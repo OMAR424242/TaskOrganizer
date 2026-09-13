@@ -7,7 +7,7 @@
  * Your tasks are NOT in here. They live in localStorage on the device, which
  * this file never touches — clearing the cache cannot lose your data.
  */
-const CACHE = 'one-thing-v9';
+const CACHE = 'one-thing-v10';
 
 const SHELL = [
   './',

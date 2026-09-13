@@ -34,6 +34,22 @@
     { id: 'orange',  l: '#ff9600', d: '#ffab2e' },
     { id: 'amber',   l: '#f0a500', d: '#ffc22e' },
     { id: 'yellow',  l: '#ffc800', d: '#ffd93d' },
+
+    /* Pastels. These are not the bright ones turned down — a tint of a
+       saturated colour goes grey and stops being identifiable, which is the
+       whole job a topic colour has. They are their own set, mixed to stay
+       distinct from each other at a glance, and each one is taken several
+       steps deeper for the dark theme, where a genuine pastel would read as
+       a smudge of white. */
+    { id: 'blush',   l: '#ff9db0', d: '#ff8fa6' },
+    { id: 'peach',   l: '#ffb08a', d: '#ff9e72' },
+    { id: 'butter',  l: '#f2c94c', d: '#ffd75e' },
+    { id: 'sage',    l: '#8fc99b', d: '#7cc98d' },
+    { id: 'seafoam', l: '#7fd4c1', d: '#6bd9c2' },
+    { id: 'powder',  l: '#93bdf0', d: '#7fb4f5' },
+    { id: 'lilac',   l: '#b9a3ed', d: '#ad93f0' },
+    { id: 'clay',    l: '#c9a48b', d: '#d2a98c' },
+
     { id: 'slate',   l: '#7c93a0', d: '#94aab6' }
   ];
   function swatch(id) {
@@ -46,9 +62,12 @@
   }
   var RETIRED = { clay: 'orange', amber: 'yellow', olive: 'green', forest: 'green',
                   plum: 'purple', rose: 'red', sand: 'orange', stone: 'slate' };
+  /* A live id always wins. The remap is only for colours that no longer
+     exist — and two of them, amber and rose, have since come back, so
+     checking the retirement list first was quietly handing back yellow and
+     red to anyone who picked them. */
   function swatchColor(id) {
-    id = RETIRED[id] || id;
-    var s = swatch(id) || SW_FALLBACK;
+    var s = swatch(id) || swatch(RETIRED[id]) || SW_FALLBACK;
     return isDark() ? s.d : s.l;
   }
 
