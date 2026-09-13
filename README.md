@@ -187,23 +187,42 @@ the front.
 
 ## What people see the first time they open the link
 
-Two things are easy to mistake for bugs the first time you see them — they're not.
+**Nothing they didn't put there.** A new install starts completely empty — no
+example tasks, no someone-else's list to clear out first. (An earlier build
+seeded eight examples. If a device still has exactly those and has never
+finished anything, the update clears them automatically; a device that has
+actually been used is left completely alone.)
 
-**A handful of tasks are already there.** Every brand-new copy of the app — yours,
-and everyone you send the link to — starts with the same small built-in list
-(Morning meds, Walk the dog, Bins out, and a few more) instead of a blank screen.
-They're not synced from anywhere; they're just examples baked into a fresh
-install, and they're free to delete.
+**The welcome asks two questions.** On a first run — and again right after
+someone creates a new account on a device with an empty list — a welcome opens:
 
-**It doesn't ask you to sign in.** The app is offline-first on purpose — it works
-immediately with no account, and syncing is optional. Once `config.js` is filled
-in, the *first time* someone opens the app on a device where they aren't signed
-in, a blue banner appears above today's circle: "Create a free account and your
-list follows you to your other devices." It has a **Create account** button that
-opens straight to the sign-up form, and a small **×** to dismiss it. It shows
-exactly once per device — it won't come back after it's dismissed, and it never
-comes back at all once that device is signed in. Sign-in itself always lives at
-the avatar, top right, whether or not the banner is still showing.
+1. *What do you do most days?* Anything added here repeats **every day**, so it
+   turns up in the circle on its own each morning.
+2. *What do you want to get done?* One-offs. They wait in the list until picked.
+
+Both steps take typing or a tap on a suggestion, both are skippable, and
+everything is saved the moment it's typed — closing half way through keeps the
+work. When it finishes, the daily ones plus up to three one-offs go straight
+onto today, so the first screen anyone sees has something on it. It's shown
+once per device and never comes back. "Start over" in the profile brings it
+back deliberately.
+
+Someone signing in to an account that already has tasks never sees it — their
+own list arrives instead.
+
+**It doesn't force a sign-in screen.** The app is offline-first on purpose — it
+works immediately with no account, and syncing is optional. Once `config.js` is
+filled in, the first time someone opens the app on a device where they aren't
+signed in, a blue banner appears above today's circle: "Create a free account
+and your list follows you to your other devices." It has a **Create account**
+button that opens straight to the sign-up form, and a small **×** to dismiss it.
+It shows once per device and never comes back once that device is signed in.
+Sign-in itself always lives at the avatar, top right.
+
+> **If nobody can sign in at all**, `config.js` is almost certainly still blank
+> — that's the one switch that turns the whole account system on. With it empty
+> the app is deliberately local-only: no banner, no login form, and the profile
+> says "Everything lives on this device." See step 3 below.
 
 ---
 

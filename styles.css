@@ -335,6 +335,9 @@ main::-webkit-scrollbar{width:0}
   border-color:var(--topic,var(--blue));
   background:color-mix(in oklab,var(--topic,var(--blue)) 14%,var(--surface));
   color:color-mix(in oklab,var(--topic,var(--blue)) var(--topic-mix),var(--ink))}
+/* The one line on the welcome screen that is allowed to be large. */
+.lede{margin:0;font-size:1.15rem;font-weight:800;line-height:1.35;letter-spacing:-.01em}
+
 .picklabel{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
   color:var(--ink-3);display:block;margin:14px 0 7px}
 

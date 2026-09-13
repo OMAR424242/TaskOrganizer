@@ -54,23 +54,18 @@
   function fresh() {
     return {
       name: '', avatar: '', dayStart: 4, theme: '', uid: 200,
-      wall: { k: 'none' }, wallDim: 58,
+      wall: { k: 'none' }, wallDim: 58, onboarded: false,
       topics: [
         { id: 't1', n: 'Personal',    sw: 'purple' },
         { id: 't2', n: 'Health',      sw: 'green'  },
         { id: 't3', n: 'Home',        sw: 'orange' },
         { id: 't4', n: 'Work/School', sw: 'blue'   }
       ],
-      library: [
-        { id: 1, t: 'Morning meds',   top: 't2', rep: { k: 'daily' } },
-        { id: 2, t: 'Walk the dog',   top: 't2', rep: { k: 'daily' } },
-        { id: 3, t: 'Bins out',       top: 't3', rep: { k: 'week', d: [2] } },
-        { id: 4, t: 'Pay the rent',   top: 't1', rep: { k: 'month', d: 1 } },
-        { id: 5, t: 'Tidy the kitchen', top: 't3', rep: { k: 'none' } },
-        { id: 6, t: 'Clear the inbox',  top: 't4', rep: { k: 'none' } },
-        { id: 7, t: 'Call Mum',         top: 't1', rep: { k: 'none' } },
-        { id: 8, t: 'Book the dentist', top: 't2', rep: { k: 'none' } }
-      ],
+      /* Empty on purpose. A new install used to arrive with eight example
+         tasks in it, which reads as somebody else's list that you have to
+         clear before you can start — the opposite of what this app is for.
+         The welcome flow asks for the real ones instead. */
+      library: [],
       day: null, history: [], removed: [], libDel: [], topDel: []
     };
   }
@@ -85,6 +80,29 @@
   if (!S.history) S.history = [];
   if (!S.wall) S.wall = { k: 'none' };
   if (typeof S.wallDim !== 'number') S.wallDim = 58;
+
+  /* The build before this one seeded eight example tasks. If a device still
+     has exactly those, with nothing finished and nothing of its own added,
+     then nobody ever really used it — clear them out so the welcome can do
+     its job. One edit, one completion, one extra task, and this leaves the
+     whole thing alone: the ids of real tasks are thirteen digits, these
+     were 1 to 8. */
+  var SEEDED = ['Morning meds', 'Walk the dog', 'Bins out', 'Pay the rent',
+                'Tidy the kitchen', 'Clear the inbox', 'Call Mum', 'Book the dentist'];
+  function untouchedSeed() {
+    if (!S.library || S.library.length !== SEEDED.length) return false;
+    if ((S.history || []).length) return false;
+    return S.library.every(function (t, i) { return t.id === i + 1 && t.t === SEEDED[i]; });
+  }
+  if (untouchedSeed()) {
+    S.library = [];
+    S.day = null;              // it pointed at tasks that no longer exist
+    S.onboarded = false;
+  }
+  if (typeof S.onboarded !== 'boolean') {
+    // Anyone already carrying a list of their own has been through this.
+    S.onboarded = S.library.length > 0 || S.history.length > 0;
+  }
   function save() {
     S.rev = Date.now();
     try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
@@ -1068,7 +1086,19 @@
           return;
         }
         // A sign-in pulls, merges and repaints; the sheet is stale now.
-        return sy.syncNow().then(function () { reopenProfile(); render(); topAvatar(); });
+        return sy.syncNow().then(function () {
+          // A brand new account arrives with nothing in it, so this is the
+          // moment for the welcome. Signing in to an account that already
+          // has a list has just filled the library — that person is set up
+          // already and gets their own tasks instead.
+          if (!S.library.length) {
+            document.querySelectorAll('.sheet,.scrim').forEach(function (n) { n.remove(); });
+            render(); topAvatar();
+            setTimeout(welcome, 180);
+            return;
+          }
+          reopenProfile(); render(); topAvatar();
+        });
       }).catch(function (err) {
         busy(false);
         say(sy.friendly(err));
@@ -1258,8 +1288,219 @@
           localStorage.removeItem(KEY); S = fresh(); ensureDay(); save();
           document.documentElement.removeAttribute('data-theme');
           close(); render(); topAvatar(); paintWall();
+          // Starting over should feel like a first run, because it is one.
+          seenIntro = false;
+          setTimeout(welcome, 320);
         });
       });
+  }
+
+  /* ── Welcome ─────────────────────────────────────────────
+     What a new person sees before anything else. It asks two questions,
+     in this order for a reason: the things that come back every day are
+     the ones people forget they can stop holding in their head, and they
+     are also the ones that make the app look alive tomorrow morning. The
+     one-offs come second because they are the part everybody already
+     knows how to type.
+
+     Everything is written to the list the moment it is typed, so closing
+     this half way through keeps the work rather than throwing it away,
+     and the whole thing is skippable at every step. It is shown once —
+     marked as shown the moment it opens, not when it is completed,
+     because a welcome you have already met should never come back. */
+  /* The suggestions carry the topic they obviously belong to, so a list built
+     entirely by tapping still comes out in more than one colour — the ring is
+     supposed to be a picture of what the day is made of, and it can't be that
+     if everything lands in the same pile. Anything typed goes to the first
+     topic and can be re-filed later. */
+  var DAILY_IDEAS = [
+    { t: 'Morning meds', top: 't2' }, { t: 'Make the bed',  top: 't3' },
+    { t: 'Walk the dog', top: 't2' }, { t: 'Drink water',   top: 't2' },
+    { t: 'Stretch',      top: 't2' }, { t: 'Tidy up',       top: 't3' },
+    { t: 'Read a bit',   top: 't1' }];
+  var ONCE_IDEAS = [
+    { t: 'Book the dentist',    top: 't2' }, { t: 'Reply to that email', top: 't4' },
+    { t: 'Pay a bill',          top: 't1' }, { t: 'Tidy the kitchen',    top: 't3' },
+    { t: 'Call someone back',   top: 't1' }];
+  var STEPS = {
+    daily: {
+      title: 'What do you do most days?',
+      note: 'Things that come back — meds, the dog, the school run. These ' +
+            'turn up in your circle on their own every morning, so they stop ' +
+            'being something you have to remember.',
+      ph: 'Something you do most days…',
+      sub: 'Every day',
+      ideas: DAILY_IDEAS,
+      next: 'Next',
+      skip: 'Nothing daily — skip'
+    },
+    once: {
+      title: 'What do you want to get done?',
+      note: 'The one-offs. They wait in your list until you pick them, and ' +
+            'nothing expires or nags you about them.',
+      ph: 'Something you want to get done…',
+      sub: 'When you get to it',
+      ideas: ONCE_IDEAS,
+      next: 'Start my day',
+      skip: 'Skip this too'
+    }
+  };
+
+  var seenIntro = false;
+  function welcome() {
+    // Second time round — after making an account on a device that skipped
+    // it — the introduction has already been read. Go straight to the ask.
+    var step = seenIntro ? 2 : 1;       // 1 intro · 2 daily · 3 one-offs
+    var added = { daily: [], once: [] };
+    var closeSheet = null;
+    seenIntro = true;
+
+    // Shown is shown. Anything typed from here is saved as it is typed.
+    S.onboarded = true; save();
+
+    function kindOf() { return step === 2 ? 'daily' : 'once'; }
+    function topicFor(want) {
+      var has = S.topics.some(function (t) { return t.id === want; });
+      return has ? want : (S.topics[0] || { id: 't1' }).id;
+    }
+    function addOne(text, top) {
+      var v = (text || '').trim().slice(0, 70);
+      if (!v) return false;
+      var taken = S.library.some(function (t) {
+        return t.t.toLowerCase() === v.toLowerCase(); });
+      if (taken) return false;
+      var kind = kindOf();
+      var nt = { id: nid(), t: v, top: topicFor(top),
+                 rep: kind === 'daily' ? { k: 'daily' } : { k: 'none' } };
+      S.library.unshift(nt);
+      added[kind].push(nt.id);
+      save();
+      return true;
+    }
+    function dropOne(id) {
+      var t = lib(id); if (!t) return;
+      S.library.splice(S.library.indexOf(t), 1);
+      S.libDel.push(id);
+      var kind = kindOf();
+      added[kind] = added[kind].filter(function (x) { return x !== id; });
+      save();
+    }
+
+    function listHtml(kind) {
+      if (!added[kind].length) return '';
+      return '<ul class="list" style="margin-top:14px">' + added[kind].map(function (id) {
+        var t = lib(id); if (!t) return '';
+        return '<li class="row" style="--topic:' + topColor(t.top) + '">' +
+          '<span class="row-body"><span class="row-title">' + esc(t.t) + '</span>' +
+          '<span class="row-sub"><b>' + esc(topic(t.top).n) + '</b> · ' +
+          esc(STEPS[kind].sub) + '</span></span>' +
+          '<button class="mini" data-drop="' + id + '" type="button" aria-label="Remove ' +
+          esc(t.t) + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+          'stroke-width="1.9" stroke-linecap="round">' +
+          '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></li>';
+      }).join('') + '</ul>';
+    }
+    function ideaHtml(kind) {
+      var have = {};
+      S.library.forEach(function (t) { have[t.t.toLowerCase()] = 1; });
+      var left = STEPS[kind].ideas.filter(function (x) { return !have[x.t.toLowerCase()]; });
+      if (!left.length) return '';
+      return '<span class="picklabel">Or tap one of these</span>' +
+        '<div class="pickrow">' + left.map(function (x) {
+          var c = topColor(topicFor(x.top));
+          return '<button class="pick" type="button" data-idea="' + esc(x.t) +
+            '" data-top="' + esc(x.top) + '" style="--topic:' + c + '">' +
+            '<i style="background:' + c + '"></i>' + esc(x.t) + '</button>'; }).join('') +
+        '</div>';
+    }
+
+    function bodyHtml() {
+      if (step === 1) {
+        return '<p class="lede">Two questions and your list is set up.</p>' +
+          '<p class="tiny">One Thing keeps the day down to a handful of things and ' +
+          'shows you a single circle for all of them. Nothing punishes you for a bad ' +
+          'day, there is no streak to lose, and everything here can be changed later.</p>' +
+          '<div style="margin-top:20px">' +
+            '<button class="btn primary" id="wGo" type="button">Set up my list</button>' +
+            '<button class="link" id="wSkip" type="button">Skip — I’ll add my own</button>' +
+          '</div>';
+      }
+      var kind = kindOf(), c = STEPS[kind];
+      return '<p class="tiny">' + c.note + '</p>' +
+        '<div style="display:flex;gap:8px;margin-top:14px">' +
+          '<input class="input" id="wIn" placeholder="' + c.ph + '" maxlength="70" ' +
+            'autocomplete="off" enterkeyhint="done">' +
+          '<button class="btn primary" id="wAdd" type="button" style="width:48px;flex:none;padding:0" ' +
+            'aria-label="Add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
+            'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">' +
+            '<path d="M12 5.5v13M5.5 12h13"/></svg></button></div>' +
+        ideaHtml(kind) +
+        listHtml(kind) +
+        '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:14px;' +
+          'margin-top:18px">' +
+          '<button class="btn primary" id="wNext" type="button">' + c.next + '</button>' +
+          '<button class="link" id="wSkipStep" type="button">' + c.skip + '</button></div>';
+    }
+
+    function finish() {
+      ensureDay();
+      // The dailies belong on today by definition; a few of the one-offs go on
+      // too, so the first screen after this is never an empty one.
+      added.daily.concat(added.once.slice(0, 3)).forEach(function (id) {
+        if (lib(id) && S.day.tasks.indexOf(id) < 0) S.day.tasks.push(id);
+      });
+      S.day.planned = true;              // the morning question would be noise now
+      save();
+      if (closeSheet) closeSheet();
+      tab = 'today';
+      setTimeout(function () { render(); paintWall(); tick(12); }, 90);
+    }
+
+    function paint(sh) {
+      sh.querySelector('.sheet-head h2').textContent =
+        step === 1 ? 'Welcome' : STEPS[kindOf()].title;
+      var body = sh.querySelector('.sheet-body');
+      body.innerHTML = bodyHtml();
+      wire(sh);
+    }
+
+    function wire(sh) {
+      var go = sh.querySelector('#wGo');
+      if (go) go.addEventListener('click', function () { step = 2; tick(8); paint(sh); });
+      var skip = sh.querySelector('#wSkip');
+      if (skip) skip.addEventListener('click', function () { if (closeSheet) closeSheet(); });
+
+      var input = sh.querySelector('#wIn');
+      if (input) {
+        var commit = function () {
+          if (addOne(input.value)) { tick(8); paint(sh); sh.querySelector('#wIn').focus(); }
+          else input.value = '';
+        };
+        input.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); } });
+        sh.querySelector('#wAdd').addEventListener('click', commit);
+      }
+      sh.querySelectorAll('[data-idea]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (addOne(b.dataset.idea, b.dataset.top)) { tick(8); paint(sh); } });
+      });
+      sh.querySelectorAll('[data-drop]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          dropOne(Number(b.dataset.drop)); paint(sh); });
+      });
+
+      var next = sh.querySelector('#wNext');
+      if (next) next.addEventListener('click', function () {
+        if (step === 2) { step = 3; tick(8); paint(sh); } else finish(); });
+      var skipStep = sh.querySelector('#wSkipStep');
+      if (skipStep) skipStep.addEventListener('click', function () {
+        if (step === 2) { step = 3; paint(sh); } else finish(); });
+    }
+
+    closeSheet = sheet('Welcome', '', function (sh, close) {
+      closeSheet = close;
+      paint(sh);
+    });
   }
 
   /* ── Morning ─────────────────────────────────────────── */
@@ -1399,5 +1640,7 @@
   render();
   paintWall();
   acctBanner();
-  setTimeout(morning, 400);
+  // A first run gets the welcome; every run after that gets the morning
+  // question. They never both appear, and neither ever blocks the app.
+  setTimeout(S.onboarded ? morning : welcome, S.onboarded ? 400 : 320);
 })();
