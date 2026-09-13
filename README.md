@@ -8,6 +8,24 @@ Works with no signal. Optionally works across all your devices.
 
 ---
 
+## If you just want the link to send people
+
+Do these in this order. The order matters — if you publish before the backend
+exists, the first people who try it will sign up against nothing.
+
+1. **Make the Supabase project and run the schema** → *Accounts and sync*, steps 1–2
+2. **Paste the two keys into `config.js`** → step 3
+3. **Push to GitHub and turn on Pages** → *Put it on GitHub*
+4. **Set the Site URL in Supabase to your Pages link** → step 4
+5. **Turn email confirmation off while you're testing** → step 5
+6. **Send the link.** Anyone who opens it taps the avatar, top right, and
+   makes an account. Laptop, phone, someone else's laptop — same email and
+   password, same tasks.
+
+About 15 minutes end to end, and free at this size.
+
+---
+
 ## What's in here
 
 | File | What it does |
@@ -231,6 +249,26 @@ const CACHE = 'one-thing-v3';   // was v2
 and push again. That's the switch that tells every installed copy to throw away
 its cache and take the new files. Your tasks are untouched — `sw.js` caches the
 app, never your data.
+
+---
+
+## The wallpaper
+
+Profile (your avatar, top right) → **Today's wallpaper**. Six built-in washes,
+or one of your own pictures, or none. It appears on Today only — a photo behind
+a list you are editing is noise; behind the one screen you open just to look at,
+it is a reason to open it.
+
+**The veil slider** is how much of the app's own background sits over the
+picture. A dark photo and a bright one need very different amounts, so it's a
+slider rather than a fixed number. Whatever you set it to, the day name, the
+greeting and the group labels keep their own backing, so nothing becomes
+unreadable at the bold end.
+
+Your picture is squeezed to under 95KB before it's stored — a phone photo is
+several megabytes, and this document gets pushed to the server on every save.
+It's going behind a veil at half opacity; sharpness was never the point. The
+wallpaper syncs with everything else, so it follows you to your other devices.
 
 ---
 

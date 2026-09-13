@@ -133,6 +133,38 @@ h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wr
   grid-template-rows:auto minmax(0,1fr) auto;background:var(--ground);position:relative}
 @media(min-width:453px){.app{border-inline:2px solid var(--rule)}}
 
+/* ═══════════ WALLPAPER ═══════════
+   A layer behind the whole column, painted only on Today. The veil above it
+   is the app's own ground colour at an adjustable opacity — which is why the
+   wallpaper works in both themes without a second set of pictures. */
+.wall{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.wall::before{content:'';position:absolute;inset:0;
+  background-image:var(--wall-img,none);background-size:cover;background-position:center}
+.wall::after{content:'';position:absolute;inset:0;
+  background:var(--ground);opacity:var(--wall-dim,.58)}
+.app.walled{background:transparent}
+.app.walled .tabbar{background:color-mix(in oklab,var(--surface) 88%,transparent);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.appbar,main,.tabbar{position:relative;z-index:1}
+
+/* The veil is the user's choice, and they are allowed to set it low. These
+   are the parts that must stay readable at *any* setting, so each one carries
+   its own ground behind it rather than trusting the slider. Task rows already
+   have solid backgrounds; this is everything that does not. */
+.app.walled .appbar{background:linear-gradient(to bottom,
+  color-mix(in oklab,var(--ground) 72%,transparent),transparent)}
+.app.walled .ringmid{background:color-mix(in oklab,var(--ground) 74%,transparent);
+  padding:13px 19px;border-radius:22px;max-width:none;
+  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.app.walled .greeting{display:table;margin-inline:auto;padding:6px 15px;border-radius:99px;
+  background:color-mix(in oklab,var(--ground) 72%,transparent);
+  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px)}
+.app.walled .groupline .label,
+.app.walled .groupline .tiny{color:var(--ink);
+  text-shadow:0 0 10px var(--ground),0 0 4px var(--ground)}
+.app.walled main > #body > .tiny{color:var(--ink-2);
+  text-shadow:0 0 10px var(--ground),0 0 4px var(--ground)}
+
 .appbar{display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:calc(14px + env(safe-area-inset-top)) 16px 8px}
 .logo{font-weight:900;font-size:1.05rem;letter-spacing:-.02em;color:var(--blue)}
@@ -173,6 +205,8 @@ main::-webkit-scrollbar{width:0}
   transition:stroke-dasharray var(--t4) var(--e-std),stroke-dashoffset var(--t4) var(--e-std),
              stroke var(--t3) var(--e-out)}
 .seg.empty{stroke:var(--rule)}
+/* The unfilled track is a hairline against a wallpaper otherwise. */
+.app.walled .seg.empty{stroke:color-mix(in oklab,var(--ink) 20%,var(--rule))}
 .ringmid{position:absolute;text-align:center;display:grid;gap:2px;place-items:center;
   max-width:150px}
 .ringcount{font-size:.8rem;font-weight:800;color:var(--ink-3);letter-spacing:.02em}
@@ -312,6 +346,26 @@ main::-webkit-scrollbar{width:0}
   color:color-mix(in oklab,var(--topic,var(--blue)) var(--topic-mix),var(--ink))}
 .picklabel{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
   color:var(--ink-3);display:block;margin:14px 0 7px}
+
+/* ── Wallpaper picker ──────────────────────────────────────────── */
+.wallrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(62px,1fr));gap:9px}
+.wallopt{aspect-ratio:3/4;border-radius:14px;border:2px solid var(--rule);
+  border-bottom-width:4px;background:var(--sunken);background-size:cover;
+  background-position:center;padding:0;display:grid;place-items:center;
+  color:var(--ink-3);
+  transition:border-color var(--t2) var(--e-out),transform var(--t1) var(--e-out)}
+.wallopt:active{transform:translateY(2px);border-bottom-width:2px}
+.wallopt svg{width:22px;height:22px}
+.wallopt.on{border-color:var(--blue);box-shadow:0 0 0 3px color-mix(in oklab,var(--blue) 25%,transparent)}
+.wallopt.photo.on svg{display:none}
+
+.slider{-webkit-appearance:none;appearance:none;width:100%;height:12px;border-radius:99px;
+  background:var(--sunken);border:2px solid var(--rule);padding:0;margin:4px 0}
+.slider::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:50%;
+  background:var(--blue);border:3px solid var(--surface);box-shadow:0 2px 0 var(--blue-dk);
+  cursor:pointer}
+.slider::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--blue);
+  border:3px solid var(--surface);box-shadow:0 2px 0 var(--blue-dk);cursor:pointer}
 .switchrow{display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:14px;border-radius:16px;background:var(--surface);border:2px solid var(--rule)}
 .switch{width:52px;height:30px;border-radius:99px;background:var(--rule-2);border:none;
@@ -842,6 +896,7 @@ window.OTSync = (function () {
   function fresh() {
     return {
       name: '', avatar: '', dayStart: 4, theme: '', uid: 200,
+      wall: { k: 'none' }, wallDim: 58,
       topics: [
         { id: 't1', n: 'Personal',    sw: 'purple' },
         { id: 't2', n: 'Health',      sw: 'green'  },
@@ -870,6 +925,8 @@ window.OTSync = (function () {
   if (!S.libDel) S.libDel = [];
   if (!S.topDel) S.topDel = [];
   if (!S.history) S.history = [];
+  if (!S.wall) S.wall = { k: 'none' };
+  if (typeof S.wallDim !== 'number') S.wallDim = 58;
   function save() {
     S.rev = Date.now();
     try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
@@ -1556,6 +1613,159 @@ window.OTSync = (function () {
   }
 
   /* ── Profile + stats ─────────────────────────────────── */
+  /* ── Wallpaper ────────────────────────────────────────
+     Today's screen can sit on a picture of your own, or on one of six
+     built-in washes. Two things keep it from wrecking the page: the
+     veil, which is a slider rather than a fixed value because a dark
+     photo and a bright one need very different amounts of it, and the
+     fact that task rows keep their own solid backgrounds, so the
+     picture shows in the gaps rather than behind the words.
+
+     It is deliberately only on Today. A wallpaper behind a list you are
+     editing is noise; behind the one screen you open to look at, it is
+     the reason to open it. */
+  var WALLS = [
+    { id: 'dawn', n: 'Dawn',  g: 'linear-gradient(155deg,#ffd9a0 0%,#ff9a8b 45%,#a78bfa 100%)' },
+    { id: 'sea',  n: 'Sea',   g: 'linear-gradient(155deg,#9be7ff 0%,#1cb0f6 52%,#3f5efb 100%)' },
+    { id: 'moss', n: 'Moss',  g: 'linear-gradient(155deg,#e2ffc4 0%,#4ead2b 58%,#0f5f36 100%)' },
+    { id: 'dusk', n: 'Dusk',  g: 'linear-gradient(155deg,#ffb199 0%,#ff4b4b 45%,#6d28d9 100%)' },
+    { id: 'sand', n: 'Sand',  g: 'linear-gradient(155deg,#fff3e0 0%,#ffc800 50%,#ff7a00 100%)' },
+    { id: 'ink',  n: 'Ink',   g: 'linear-gradient(155deg,#5b7cb7 0%,#243b55 55%,#121c26 100%)' }
+  ];
+  function wallCss(w) {
+    if (!w || w.k === 'none') return '';
+    if (w.k === 'grad') {
+      var g = WALLS.filter(function (x) { return x.id === w.g; })[0];
+      return g ? g.g : '';
+    }
+    if (w.k === 'img' && w.src) return 'url("' + w.src + '")';
+    return '';
+  }
+  function paintWall() {
+    var app = document.querySelector('.app');
+    var layer = document.getElementById('wall');
+    if (!layer) {
+      layer = document.createElement('div');
+      layer.id = 'wall'; layer.className = 'wall'; layer.setAttribute('aria-hidden', 'true');
+      app.insertBefore(layer, app.firstChild);
+    }
+    var css = tab === 'today' ? wallCss(S.wall) : '';
+    app.classList.toggle('walled', !!css);
+    layer.style.setProperty('--wall-img', css || 'none');
+    layer.style.setProperty('--wall-dim', String(Math.min(Math.max(S.wallDim, 0), 95) / 100));
+  }
+
+  /* A phone photo is several megabytes and this document is pushed to the
+     server on every save, so it gets squeezed until it fits a budget. It is
+     going behind a veil at half opacity — sharpness was never the point. */
+  var WALL_BUDGET = 95000;
+  function shrinkWall(img, done) {
+    var w = img.width, h = img.height;
+    var long = Math.max(w, h), scale = Math.min(1, 1100 / long);
+    function attempt(sc, q) {
+      var cv = document.createElement('canvas');
+      cv.width = Math.max(Math.round(w * sc), 1);
+      cv.height = Math.max(Math.round(h * sc), 1);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      return cv.toDataURL('image/jpeg', q);
+    }
+    var out = attempt(scale, 0.72);
+    var qs = [0.6, 0.5, 0.42];
+    for (var i = 0; i < qs.length && out.length > WALL_BUDGET; i++) out = attempt(scale, qs[i]);
+    while (out.length > WALL_BUDGET && scale > 0.2) {
+      scale *= 0.8;
+      out = attempt(scale, 0.5);
+    }
+    done(out);
+  }
+
+  function wallHtml() {
+    var w = S.wall || { k: 'none' };
+    return '<div class="groupline"><span class="label">Today\u2019s wallpaper</span></div>' +
+      '<div class="wallrow">' +
+        '<button class="wallopt' + (w.k === 'none' ? ' on' : '') + '" type="button" data-w="none" ' +
+          'aria-pressed="' + (w.k === 'none') + '" aria-label="No wallpaper">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
+          'stroke-linecap="round"><circle cx="12" cy="12" r="8.2"/>' +
+          '<path d="M6.2 17.8L17.8 6.2"/></svg></button>' +
+        WALLS.map(function (g) {
+          return '<button class="wallopt' + (w.k === 'grad' && w.g === g.id ? ' on' : '') +
+            '" type="button" data-w="' + g.id + '" aria-pressed="' +
+            (w.k === 'grad' && w.g === g.id) + '" style="background-image:' + g.g +
+            '" aria-label="' + g.n + '"></button>'; }).join('') +
+        '<button class="wallopt photo' + (w.k === 'img' ? ' on' : '') + '" type="button" id="wallPick" ' +
+          'aria-pressed="' + (w.k === 'img') + '" aria-label="Use one of your own pictures"' +
+          (w.k === 'img' ? ' style="background-image:url(&quot;' + w.src + '&quot;)"' : '') + '>' +
+          (w.k === 'img' ? '' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+          'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
+          '<rect x="3.2" y="5" width="17.6" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/>' +
+          '<path d="M4 17l4.5-4.5 3 3L15.5 11l4.5 4.5"/></svg>') + '</button>' +
+      '</div>' +
+      '<input type="file" id="wallFile" accept="image/*" class="hidden">' +
+      '<div class="field" id="dimField"' + (w.k === 'none' ? ' hidden' : '') + '>' +
+        '<label for="wallDim">How much to veil it</label>' +
+        '<input class="slider" type="range" id="wallDim" min="28" max="92" step="1" value="' +
+          S.wallDim + '">' +
+        '<p class="tiny" id="dimNote"></p></div>';
+  }
+
+  function wireWall(sh) {
+    function repaintCard() {
+      var host = sh.querySelector('#wallCard');
+      if (!host) return;
+      host.innerHTML = wallHtml();
+      wireWall(sh);
+    }
+    function note() {
+      var el2 = sh.querySelector('#dimNote');
+      if (!el2) return;
+      el2.textContent = S.wallDim > 72
+        ? 'Barely there \u2014 easiest to read.'
+        : S.wallDim > 45 ? 'A hint of it behind the circle.'
+        : 'Bold. Check it still reads in the light you use.';
+    }
+    note();
+
+    sh.querySelectorAll('[data-w]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var v = b.dataset.w;
+        S.wall = v === 'none' ? { k: 'none' } : { k: 'grad', g: v };
+        save(); tick(); paintWall(); repaintCard();
+      });
+    });
+
+    var pick = sh.querySelector('#wallPick');
+    if (pick) pick.addEventListener('click', function () { sh.querySelector('#wallFile').click(); });
+    var file = sh.querySelector('#wallFile');
+    if (file) file.addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0]; if (!f) return;
+      var r = new FileReader();
+      r.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          shrinkWall(img, function (src) {
+            S.wall = { k: 'img', src: src };
+            save(); tick(); paintWall(); repaintCard();
+          });
+        };
+        img.onerror = function () { toast('That file did not open as a picture.'); };
+        img.src = r.result;
+      };
+      r.readAsDataURL(f);
+    });
+
+    var dim = sh.querySelector('#wallDim');
+    if (dim) {
+      dim.addEventListener('input', function () {
+        S.wallDim = Number(dim.value);
+        // Repaint live so the slider is a preview, not a guess. Saving is
+        // debounced by the sync layer anyway.
+        paintWall(); note();
+      });
+      dim.addEventListener('change', function () { save(); });
+    }
+  }
+
   /* ── Account ──────────────────────────────────────────
      Four states, and the important one is the first: with no backend
      configured this is a single reassuring sentence, not a dead login
@@ -1774,6 +1984,8 @@ window.OTSync = (function () {
             '<path d="M20 6.5V12h-5.5"/></svg></button></li>'; }).join('') + '</ul>' +
         '<p class="tiny">Tapped one by mistake? Put it back.</p>' : '') +
 
+      '<div id="wallCard">' + wallHtml() + '</div>' +
+
       accountHtml() +
 
       '<div class="groupline"><span class="label">Settings</span></div>' +
@@ -1826,6 +2038,7 @@ window.OTSync = (function () {
         });
 
         wireAccount(sh);
+        wireWall(sh);
 
         function note() {
           sh.querySelector('#hourNote').innerHTML = 'Something finished at 1am counts toward ' +
@@ -1852,7 +2065,7 @@ window.OTSync = (function () {
           if (!confirm('Clear all tasks, topics, history and settings?')) return;
           localStorage.removeItem(KEY); S = fresh(); ensureDay(); save();
           document.documentElement.removeAttribute('data-theme');
-          close(); render(); topAvatar();
+          close(); render(); topAvatar(); paintWall();
         });
       });
   }
@@ -1941,6 +2154,7 @@ window.OTSync = (function () {
   }
   function render() {
     if (tab === 'today') renderToday(); else renderTasks();
+    paintWall();
     document.querySelectorAll('.tabbtn').forEach(function (b) {
       if (b.dataset.tab === tab) b.setAttribute('aria-selected', 'true');
       else b.removeAttribute('aria-selected'); });
@@ -1990,6 +2204,7 @@ window.OTSync = (function () {
 
   topAvatar();
   render();
+  paintWall();
   setTimeout(morning, 400);
 })();
 
