@@ -7,7 +7,7 @@
  * Your tasks are NOT in here. They live in localStorage on the device, which
  * this file never touches — clearing the cache cannot lose your data.
  */
-const CACHE = 'one-thing-v11';
+const CACHE = 'one-thing-v17';
 
 const SHELL = [
   './',
@@ -17,6 +17,24 @@ const SHELL = [
   './sync.js',
   './app.js',
   './fonts/nunito-variable.woff2',
+  './fonts/OpenDyslexic-Regular.woff2',
+  './fonts/OpenDyslexic-Bold.woff2',
+  './fonts/AtkinsonHyperlegible-Regular.woff2',
+  './fonts/AtkinsonHyperlegible-Bold.woff2',
+  './art/char-m-idle.webp',
+  './art/char-m-cook.webp',
+  './art/char-m-move.webp',
+  './art/char-m-eat.webp',
+  './art/char-m-study.webp',
+  './art/char-m-work.webp',
+  './art/char-m-cheer.webp',
+  './art/char-f-idle.webp',
+  './art/char-f-cook.webp',
+  './art/char-f-move.webp',
+  './art/char-f-eat.webp',
+  './art/char-f-study.webp',
+  './art/char-f-work.webp',
+  './art/char-f-cheer.webp',
   './manifest.webmanifest',
   './favicon.png',
   './icons/icon-192.png',

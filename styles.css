@@ -25,6 +25,44 @@
     U+2215,U+FEFF,U+FFFD;
 }
 
+/* Two more, both shipped the same self-hosted way and both SIL Open Font
+   License. Neither is a proven fix for dyslexia specifically — the evidence
+   for OpenDyslexic's own lettering is thin — but offering a choice is the
+   evidence-backed part: a UCL-affiliated study found readers' preference
+   didn't track their actual performance, so the right move is to let each
+   person pick rather than crown one "the" dyslexia font. Atkinson
+   Hyperlegible is the Braille Institute's face, drawn to keep easily-confused
+   letters like b/d/p/q and l/1/I apart. See fonts/OPENDYSLEXIC-LICENSE.txt
+   and fonts/ATKINSON-LICENSE.txt. */
+@font-face{
+  font-family:'OpenDyslexic';
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url('./fonts/OpenDyslexic-Regular.woff2') format('woff2');
+}
+@font-face{
+  font-family:'OpenDyslexic';
+  font-style:normal;
+  font-weight:700;
+  font-display:swap;
+  src:url('./fonts/OpenDyslexic-Bold.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Atkinson Hyperlegible';
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url('./fonts/AtkinsonHyperlegible-Regular.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Atkinson Hyperlegible';
+  font-style:normal;
+  font-weight:700;
+  font-display:swap;
+  src:url('./fonts/AtkinsonHyperlegible-Bold.woff2') format('woff2');
+}
+
 :root{
   /* The ground is a warm off-white rather than paper white, so the cards
      sitting on it read as objects with an edge instead of as holes cut in
@@ -55,6 +93,16 @@
   --sheen:rgba(255,255,255,.7);
   --depth:rgba(31,24,16,.28);
 
+  /* The companion is a glossy little rendered toy, and the rest of the app
+     has to sit in the same light or it reads as pasted on. `--gloss` is a
+     specular pass down a raised face: bright along the top edge, falling to
+     a shade of its own colour at the bottom. `--pop` is how much of a
+     control's own hue bleeds into the shadow it casts — a green button
+     dropping a green shadow rather than a grey one is most of the
+     difference between something rendered and something drawn. */
+  --gloss:linear-gradient(180deg,rgba(255,255,255,.30),rgba(255,255,255,.05) 42%,rgba(0,0,0,.06));
+  --pop:34%;
+
   --accent:var(--green); --accent-dk:var(--green-dk); --on-accent:#ffffff;
   --done:var(--green);
 
@@ -75,12 +123,32 @@
 
   --topic-mix:72%;
   --font:'Nunito',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+
+  /* A hair of paper grain on the surfaces you actually sit and read or type
+     on — the app card and the sheets, not every button. It is a neutral
+     grey tile whose alpha (not colour) carries the speckle, so plain
+     compositing darkens the light theme's cream a touch and lightens the
+     dark theme's slate a touch — one file, correct in both, no blend-mode
+     tricks that wash out near white or near black. */
+  --grain:url(data:image/png;base64,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);
+}
+/* Text picker — same idea as the theme attribute, just for `--font`. Set
+   once at boot and on change, never touched by the theme rules above. */
+:root[data-font="dyslexic"]{
+  --font:'OpenDyslexic',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+:root[data-font="legible"]{
+  --font:'Atkinson Hyperlegible',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --topic-mix:88%;    --row-tint:26%;
     --sheen:rgba(255,255,255,.09);
     --depth:rgba(0,0,0,.55);
+    /* A dark face takes far less white before it looks chalky, and a
+       coloured shadow has to work harder to be seen at all. */
+    --gloss:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.02) 42%,rgba(0,0,0,.18));
+    --pop:52%;
     --ground:#111d22;   --ground-2:#0d171b;
     --surface:#1c2c33;  --sunken:#16242a;  --raised:#22363e;
     --ink:#f2f8fc;      --ink-2:#adc2cd;   --ink-3:#728a95;
@@ -96,6 +164,8 @@
   --topic-mix:88%;    --row-tint:26%;
   --sheen:rgba(255,255,255,.09);
   --depth:rgba(0,0,0,.55);
+  --gloss:linear-gradient(180deg,rgba(255,255,255,.13),rgba(255,255,255,.02) 42%,rgba(0,0,0,.18));
+  --pop:52%;
   --ground:#111d22;   --ground-2:#0d171b;
   --surface:#1c2c33;  --sunken:#16242a;  --raised:#22363e;
   --ink:#f2f8fc;      --ink-2:#adc2cd;   --ink-3:#728a95;
@@ -125,7 +195,15 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font);
      300ms the browser would otherwise wait to see if a second one lands. */
   touch-action:manipulation}
 button{font:inherit;color:inherit;cursor:pointer;font-family:var(--font)}
-:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:8px}
+/* Every control here already answers a press by moving — a button drops onto
+   its bottom edge, a checkbox shrinks, the character bumps. The browser's own
+   grey rectangle on top of that is redundant, squarer than anything it lands
+   on, and the one thing on screen that isn't in the app's palette. */
+html{-webkit-tap-highlight-color:transparent}
+/* The ring follows whatever shape it is on — a pill button, a round checkbox,
+   the circular add button — which a fixed 8px radius could only ever match by
+   accident. Outline has traced border-radius on its own for years. */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
 
 /* ═══════════ TYPE ═══════════ */
 h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wrap:balance}
@@ -139,10 +217,35 @@ h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wr
 /* A definite height, not a minimum: with `min-height` the 1fr middle row
    resolves against its content instead of the viewport, so a long list
    pushes the whole column — tab bar included — past the bottom edge. */
+/* Not a flat sheet of cream any more — a very wide, very soft wash of the
+   app's own two hues, blue falling from the top and green rising from the
+   bottom corner. It is nowhere near strong enough to read as a gradient;
+   what it does is stop the ground being the same value everywhere, which
+   is what made the surfaces on top of it look printed rather than lit. */
 .app{max-width:452px;margin:0 auto;height:100%;display:grid;
-  grid-template-rows:auto minmax(0,1fr) auto;background:var(--ground);position:relative;
+  grid-template-rows:auto minmax(0,1fr) auto;position:relative;
+  background:
+    radial-gradient(118% 62% at 50% -8%,
+      color-mix(in oklab,var(--blue) 18%,var(--ground)) 0%,transparent 70%),
+    radial-gradient(92% 48% at 6% 108%,
+      color-mix(in oklab,var(--green) 16%,var(--ground)) 0%,transparent 72%),
+    var(--ground);
   overflow:hidden}
-@media(min-width:453px){.app{border-inline:2px solid var(--rule)}}
+.app::before{content:'';position:absolute;inset:0;background-image:var(--grain);
+  background-repeat:repeat;pointer-events:none;z-index:0}
+/* Below this width the app IS the browser — a phone screen has nowhere
+   else for the frame to go. Above it, the same page in a wide window used
+   to read as an accident: a thin-bordered column adrift on a page the
+   exact same colour as itself, nothing telling you the rest of the window
+   isn't part of it. One surrounding tone, a lifted card and some room
+   around it is the difference between "a website that forgot to be
+   responsive" and "an app that happens to be running in a browser tab". */
+@media(min-width:453px){
+  body{background:color-mix(in oklab,var(--ink) 8%,var(--ground))}
+  .app{border:2px solid var(--rule);border-radius:22px;margin:28px auto;
+    height:calc(100% - 56px);max-height:900px;
+    box-shadow:0 30px 70px -30px rgba(0,0,0,.35),0 8px 20px -12px rgba(0,0,0,.2)}
+}
 
 /* ═══════════ WALLPAPER ═══════════
    A layer behind the whole column, painted only on Today. The veil above it
@@ -232,8 +335,17 @@ main::-webkit-scrollbar{width:0}
   align-items:center;gap:3px;padding:11px 4px 10px;color:var(--ink-3);
   font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
   position:relative;white-space:nowrap;transition:color var(--t2) var(--e-out)}
-.tabbtn svg{width:24px;height:24px;
+.tabbtn svg{width:24px;height:24px;position:relative;z-index:1;
   transition:transform var(--t3) var(--e-back)}
+.tabbtn span{position:relative;z-index:1}
+/* A soft pill swells in behind the icon of the tab you're on. It grows from
+   the centre like the bar below it, so arriving somewhere reads as one
+   movement rather than two unrelated ones. */
+.tabbtn::before{content:'';position:absolute;top:7px;left:50%;width:46px;height:30px;
+  border-radius:99px;background:color-mix(in oklab,var(--blue) 16%,transparent);
+  transform:translateX(-50%) scale(.55);opacity:0;
+  transition:transform var(--t3) var(--e-back),opacity var(--t2) var(--e-out)}
+.tabbtn[aria-selected="true"]::before{transform:translateX(-50%) scale(1);opacity:1}
 .tabbtn[aria-selected="true"]{color:var(--blue)}
 .tabbtn[aria-selected="true"] svg{transform:translateY(-2px) scale(1.12)}
 .tabbtn:active svg{transform:scale(.9)}
@@ -244,6 +356,32 @@ main::-webkit-scrollbar{width:0}
   transform:translateX(-50%) scaleX(0);transform-origin:center;
   transition:transform var(--t3) var(--e-back)}
 .tabbtn[aria-selected="true"]::after{transform:translateX(-50%) scaleX(1)}
+
+/* ═══════════ FLOATING ADD ═══════════
+   Lives above `main`, positioned against `.app` rather than the viewport —
+   `.app` is what actually frames the phone-width column, even in the wide
+   desktop surround above, and a plain position:fixed would float off to
+   the real window edge instead of staying with the card. It travels with
+   whatever you're looking at rather than waiting at the bottom of a list
+   only reachable after a long scroll down. */
+/* A sphere rather than a disc: the highlight sits up and left where the
+   key light is, the fill rolls to the darker edge colour at the bottom,
+   and the shadow it drops is its own green. */
+.fab{position:absolute;right:18px;bottom:82px;width:58px;height:58px;border-radius:50%;
+  border:none;color:#fff;display:grid;place-items:center;
+  background:radial-gradient(118% 118% at 32% 20%,
+    color-mix(in oklab,#fff 36%,var(--green)) 0%,
+    var(--green) 48%,
+    var(--green-dk) 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.5),
+    inset 0 -3px 5px -2px color-mix(in oklab,var(--green-dk) 80%,transparent),
+    0 13px 24px -10px color-mix(in oklab,var(--green) var(--pop),var(--depth)),
+    0 4px 9px -3px var(--depth);z-index:20;
+  transition:transform var(--t2) var(--e-out),opacity var(--t2) var(--e-out)}
+.fab:active{transform:scale(.9)}
+.fab.hidden{opacity:0;transform:scale(.5);pointer-events:none}
+.kb .fab{display:none}
 
 /* Anything tappable gets the same small give. The big targets you might
    also start a scroll on wait, like the rows do; the small ones in the bar
@@ -279,7 +417,10 @@ main::-webkit-scrollbar{width:0}
 /* Only the finished arcs are lifted — the empty track stays flat, so the
    ring fills with something that has weight rather than merely colour. */
 .seg:not(.empty){filter:drop-shadow(0 1.5px 1.5px var(--depth))}
-.seg.empty{stroke:var(--rule)}
+/* The empty track has to hold its own against a ground that is no longer a
+   flat tone, or the ring stops reading as an object and becomes a faint
+   circle drawn on the page. */
+.seg.empty{stroke:color-mix(in oklab,var(--ink) 12%,var(--rule))}
 /* The unfilled track is a hairline against a wallpaper otherwise. */
 .app.walled .seg.empty{stroke:color-mix(in oklab,var(--ink) 20%,var(--rule))}
 .ringmid{position:absolute;text-align:center;display:grid;gap:2px;place-items:center;
@@ -291,6 +432,59 @@ main::-webkit-scrollbar{width:0}
 @keyframes finale{0%{transform:rotate(0) scale(1);opacity:1}
   55%{transform:rotate(390deg) scale(1.08);opacity:1}
   100%{transform:rotate(720deg) scale(.08);opacity:0}}
+
+/* ═══════════ PET ═══════════
+   A companion, not a meter. It has no daily state at all — what it reads
+   is one lifetime count that can only go up, so there is nothing to
+   protect it from and no version of it that looks disappointed. It grows
+   a few times over the life of the app and then stops on purpose, so it
+   stays a small warm presence rather than a new number to watch daily. */
+/* He stands on the same left margin as the group headings and the rows
+   below him, rather than floating at some arbitrary point under the ring.
+   One alignment relationship is the difference between a character placed
+   in the layout and a sticker dropped on it. */
+.petrow{display:flex;align-items:flex-end;gap:6px;justify-content:flex-start;margin-top:2px}
+.petrow .greeting{flex:1;min-width:0;text-align:center}
+/* Two backgrounds, no pseudo-elements: a halo in whatever colour was picked
+   in the companion sheet, and a soft smudge under the feet without which he
+   floats. Backgrounds paint behind children by definition, so neither can
+   ever end up on top of the art the way an absolutely-positioned layer
+   inside a button can. */
+.pet{flex:none;display:grid;place-items:end center;padding:0 12px 5px;
+  background:
+    radial-gradient(38% 7% at 50% 96%,
+      color-mix(in oklab,var(--depth) 88%,transparent) 0%,transparent 72%),
+    /* No halo until a colour is actually chosen — the fallback mixes
+       transparent with transparent, which is nothing at all. */
+    radial-gradient(52% 42% at 50% 58%,
+      color-mix(in oklab,var(--pet-hue,transparent) 30%,transparent) 0%,transparent 74%)}
+/* It is a real button — tap it to name and dress him — but it should read
+   as the character standing there, not as a control. */
+#pet{border:none;transition:transform var(--t1) var(--e-out)}
+#pet:active{transform:scale(.94)}
+.char{display:block;height:var(--char-h,106px);width:auto;
+  filter:drop-shadow(0 7px 8px color-mix(in oklab,var(--depth) 78%,transparent))}
+/* He grows with the lifetime total. Same render, more of him — which is the
+   whole stage system intact without needing four separate drawings. */
+.pet[data-stage="1"]{--char-h:114px}
+.pet[data-stage="2"]{--char-h:122px}
+.pet[data-stage="3"]{--char-h:130px}
+.pet[data-stage="3"] .char{
+  filter:drop-shadow(0 7px 8px color-mix(in oklab,var(--depth) 78%,transparent))
+    drop-shadow(0 0 11px color-mix(in oklab,var(--yellow) 50%,transparent))}
+.pet-big{--char-h:190px;margin:2px 0 12px;padding-bottom:6px}
+.pet-eye,.pet-mouth,.pet-brow{transform-origin:center;transform-box:fill-box}
+.pet.bump{animation:petBump 620ms var(--e-back)}
+@keyframes petBump{0%{transform:scale(1) rotate(0)}35%{transform:scale(1.16) rotate(-4deg)}
+  65%{transform:scale(1.05) rotate(3deg)}100%{transform:scale(1) rotate(0)}}
+.pet.evolve{animation:petEvolve 900ms var(--e-back)}
+@keyframes petEvolve{0%{transform:scale(1) rotate(0)}30%{transform:scale(1.35) rotate(-6deg)}
+  55%{transform:scale(.94) rotate(4deg)}80%{transform:scale(1.08) rotate(-2deg)}
+  100%{transform:scale(1) rotate(0)}}
+@media (prefers-reduced-motion:reduce){
+  .pet-eye{animation:none}
+  .pet.bump,.pet.evolve{animation:none}
+}
 
 /* ═══════════ ROWS ═══════════ */
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
@@ -314,11 +508,26 @@ main::-webkit-scrollbar{width:0}
       color-mix(in oklab,var(--topic,transparent) var(--row-tint),var(--surface)) 62%,
       color-mix(in oklab,var(--topic,transparent) calc(var(--row-tint) * 1.35),var(--surface)) 100%);
   box-shadow:
-    inset 0 1.5px 0 var(--sheen),
+    inset 0 2px 0 var(--sheen),
     0 1px 1px rgba(0,0,0,.03),
-    0 6px 14px -8px var(--depth);
+    0 9px 18px -11px color-mix(in oklab,var(--topic,var(--depth)) var(--pop),var(--depth));
 }
-.row-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+/* This is a <button> on an open row and a <span> on a finished one, so the
+   button's own chrome has to come off: the row is the surface it sits on,
+   and the only thing that should look tappable about the words is that they
+   are the words. */
+.row-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;
+  background:none;border:0;padding:0;margin:0;font:inherit;color:inherit;
+  text-align:left;-webkit-appearance:none;appearance:none;border-radius:10px}
+button.row-body{cursor:pointer}
+/* The running clock, on the row it belongs to. Tabular figures because a
+   number that changes every second must not change width every second. */
+.row-clock{flex:none;font-size:.78rem;font-weight:800;padding:4px 8px;border-radius:9px;
+  font-variant-numeric:tabular-nums;
+  color:color-mix(in oklab,var(--topic,var(--ink-2)) var(--topic-mix),var(--ink));
+  background:color-mix(in oklab,var(--topic,var(--rule)) 15%,var(--surface));
+  box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--topic,var(--rule)) 32%,transparent)}
+.row.timing{border-color:color-mix(in oklab,var(--topic,var(--rule-2)) 55%,var(--rule))}
 .row-title{font-size:.97rem;font-weight:700;line-height:1.3;position:relative;
   word-break:break-word}
 .row-sub{font-size:.76rem;color:var(--ink-2);font-weight:700}
@@ -392,7 +601,16 @@ main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
 .cbx svg{width:17px;height:17px}
 .cbx path{fill:none;stroke:#fff;stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round;
   stroke-dasharray:1;stroke-dashoffset:1}
-.cbx.on{background:var(--green);border-color:var(--green-dk)}
+/* Ticked, it stops being a hole and becomes a lit green button sitting
+   proud of the row — same sphere treatment as the floating add. */
+.cbx.on{border-color:var(--green-dk);
+  background:radial-gradient(112% 112% at 34% 18%,
+    color-mix(in oklab,#fff 32%,var(--green)) 0%,
+    var(--green) 54%,
+    var(--green-dk) 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.42),
+    0 4px 8px -4px color-mix(in oklab,var(--green) var(--pop),var(--depth))}
 .cbx.on path{animation:draw 160ms var(--e-expo) forwards}
 @keyframes draw{to{stroke-dashoffset:0}}
 
@@ -405,14 +623,19 @@ main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
    Solid fill, darker bottom edge, and the edge collapses on press. That one
    detail is most of why these feel like keys rather than rectangles. */
 .btn{font-size:.95rem;font-weight:800;text-transform:uppercase;letter-spacing:.055em;
-  border-radius:16px;border:none;border-bottom:4px solid var(--btn-edge,transparent);
+  border-radius:18px;border:none;border-bottom:5px solid var(--btn-edge,transparent);
   padding:14px 18px;width:100%;display:flex;align-items:center;justify-content:center;
   gap:8px;background:var(--btn-bg,var(--surface));color:var(--btn-ink,var(--ink));
   transition:transform var(--t1) var(--e-out),filter var(--t2) var(--e-out),
              opacity var(--t2) var(--e-out)}
-.btn:active{transform:translateY(3px);border-bottom-width:1px;margin-bottom:3px}
-.btn{box-shadow:inset 0 1.5px 0 rgba(255,255,255,.22),0 4px 12px -8px var(--depth)}
-.btn.quiet{box-shadow:inset 0 1.5px 0 var(--sheen),0 4px 12px -8px var(--depth)}
+.btn:active{transform:translateY(4px);border-bottom-width:1px;margin-bottom:4px}
+/* The gloss goes on as an image over whatever fill the button carries, so
+   one declaration lights every variant, and the drop shadow is mixed from
+   the button's own colour. */
+.btn{background-image:var(--gloss);
+  box-shadow:inset 0 2px 0 rgba(255,255,255,.3),
+    0 9px 18px -11px color-mix(in oklab,var(--btn-bg,var(--depth)) var(--pop),var(--depth))}
+.btn.quiet{box-shadow:inset 0 2px 0 var(--sheen),0 9px 18px -11px var(--depth)}
 .btn.primary{--btn-bg:var(--green);--btn-edge:var(--green-dk);--btn-ink:#fff}
 .btn.blue{--btn-bg:var(--blue);--btn-edge:var(--blue-dk);--btn-ink:#fff}
 .btn.danger{--btn-bg:var(--red);--btn-edge:var(--red-dk);--btn-ink:#fff}
@@ -445,10 +668,20 @@ main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
   border-radius:22px 22px 0 0;box-shadow:var(--sh-3);display:flex;flex-direction:column;
   animation:sheetIn var(--t4) var(--e-std);padding-bottom:env(safe-area-inset-bottom);
   border:2px solid var(--rule);border-bottom:none}
+.sheet::before{content:'';position:absolute;inset:0;border-radius:inherit;
+  background-image:var(--grain);background-repeat:repeat;pointer-events:none;z-index:-1}
 @keyframes sheetIn{from{transform:translate(-50%,100%)}to{transform:translate(-50%,0)}}
 .sheet.out{animation:sheetOut var(--t3) var(--e-in) forwards}
 @keyframes sheetOut{to{transform:translate(-50%,100%)}}
 .grab{width:38px;height:5px;border-radius:99px;background:var(--rule-2);margin:9px auto 0;flex:none}
+/* A sheet's surface is the ground colour with a grain layer over it. A sticky
+   footer painted in flat --ground sits on top of that grain and reads as a
+   darker panel pasted across the sheet — obvious in the dark theme, where the
+   grain lifts the surface by a good thirty points. Same two layers here, same
+   tone, and the band stops existing. */
+.sheet-foot{position:sticky;bottom:0;z-index:2;display:flex;flex-direction:column;gap:6px;
+  padding-top:12px;padding-bottom:2px;
+  background-color:var(--ground);background-image:var(--grain);background-repeat:repeat}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:10px 16px;flex:none}
 .sheet-head h2{font-size:1.3rem}
@@ -467,6 +700,9 @@ main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
 .input::placeholder{color:var(--ink-3);font-weight:600}
 .input:focus{outline:none;border-color:var(--blue);background:var(--surface)}
 .pickrow{display:flex;gap:7px;flex-wrap:wrap}
+/* A choice that exists but has nothing behind it yet — greyed, still
+   readable, and saying so rather than silently doing nothing. */
+.pick[disabled]{opacity:.45;cursor:default}
 .pick{font-family:var(--font);font-size:.81rem;font-weight:800;padding:9px 14px;
   border-radius:14px;background:var(--surface);color:var(--ink-2);
   border:2px solid var(--rule);border-bottom-width:3px;display:inline-flex;
@@ -563,14 +799,25 @@ main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
   border:1px solid var(--rule)}
 .bartrack i{display:block;height:100%;border-radius:99px}
 
-/* ═══════════ ARCHIVE ═══════════
-   The record of what has been finished. Deliberately lighter than a task
-   row: these are not things you can act on, and drawing them like the ones
-   you can would make the list read as work still to do. */
+/* ═══════════ HISTORY ═══════════
+   A list of day-buttons rather than a table of everything — nothing below
+   opens until you tap a day. */
+.daylist{display:flex;flex-direction:column;gap:9px}
+.dayrow{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:16px;
+  background:var(--surface);border:2px solid var(--rule);border-bottom-width:4px;
+  width:100%;text-align:left;font-family:var(--font);
+  transition:border-color var(--t2) var(--e-out),transform var(--t1) var(--e-out)}
+.dayrow:active{transform:translateY(2px);border-bottom-width:2px;margin-bottom:2px}
+.daylabel{font-weight:800;font-size:.95rem;color:var(--ink)}
+.daydots{display:flex;gap:3px;flex:1;min-width:0;overflow:hidden}
+.daydots .dot{width:8px;height:8px;box-shadow:none;flex:none}
+.dayrow .tiny{flex:none;color:var(--ink-3)}
+.dayrow .chev{width:16px;height:16px;flex:none;color:var(--ink-3)}
+
+/* The record inside a single day, opened in a sheet. Deliberately lighter
+   than a task row: these are not things you can act on, and drawing them
+   like the ones you can would make the list read as work still to do. */
 .archive{display:flex;flex-direction:column;gap:2px}
-.archday{font-size:.7rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--ink-3);padding:12px 2px 5px}
-.archday:first-child{padding-top:2px}
 .archrow{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;
   background:var(--sunken)}
 .archrow .dot{width:9px;height:9px;box-shadow:none}
@@ -626,3 +873,299 @@ hr.rule{border:none;border-top:2px solid var(--rule);margin:4px 0}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .syncline{display:flex;align-items:center;gap:9px;font-size:.8rem;font-weight:700;
   color:var(--ink-2)}
+
+/* ═══════════ FOCUS ═══════════ */
+/* Full screen, and that is the point. Every other screen in the app is a
+   list of things you could be doing; this is the one that shows a single
+   thing and nothing else — the argument of the whole app, made literal for
+   as long as you are actually doing it. */
+.focus{position:fixed;inset:0;z-index:92;display:flex;flex-direction:column;
+  background:
+    radial-gradient(122% 58% at 50% -6%,
+      color-mix(in oklab,var(--topic,var(--blue)) 20%,var(--ground)) 0%,transparent 72%),
+    var(--ground);
+  animation:focusIn var(--t4) var(--e-out)}
+.focus::before{content:'';position:absolute;inset:0;background-image:var(--grain);
+  background-repeat:repeat;pointer-events:none;opacity:.5}
+.focus.out{animation:focusOut var(--t3) var(--e-in) forwards}
+@keyframes focusIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes focusOut{to{opacity:0;transform:translateY(10px)}}
+
+/* Same column width the sheets use, so on a desktop window the focus view
+   is the app standing in the middle of the screen rather than one button
+   stretched across a metre of glass. */
+.focus-bar,.focus-mid,.focus-acts{width:100%;max-width:452px;margin-inline:auto}
+.focus-bar{display:flex;padding:14px 14px 0;position:relative;z-index:1}
+.focus-mid{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px;padding:0 20px;text-align:center;
+  position:relative;z-index:1}
+.focus-acts{flex:none;display:flex;flex-direction:column;gap:8px;position:relative;z-index:1;
+  padding:14px 18px calc(18px + env(safe-area-inset-bottom,0px))}
+.focus-acts .btn[hidden]{display:none}
+
+/* The character stands inside the clock rather than beside it, so there is
+   one object on the screen instead of two competing for the middle.
+   Both sizes come off one length in calc rather than a percentage: a
+   percentage height inside a box that is itself sized by aspect-ratio has
+   nothing resolved to measure against, and silently falls back to the
+   image's natural height — which is 560px, and pushed the buttons clean
+   off the bottom of the screen. */
+.focus-stage{--stage:min(72vw,272px);flex:none;position:relative;
+  width:var(--stage);height:var(--stage);display:grid;place-items:center;margin-bottom:4px}
+.focus-ring{position:absolute;inset:0;width:100%;height:100%;
+  transform:rotate(-90deg);overflow:visible}
+.fr-track,.fr-arc{fill:none;stroke-width:3.4;stroke-linecap:round}
+.fr-track{stroke:color-mix(in oklab,var(--ink) 12%,var(--rule))}
+/* A hair under a second, linear: the arc has to arrive exactly as the next
+   repaint does or the ring and the number disagree about the time. */
+.fr-arc{stroke:var(--topic,var(--blue));
+  transition:stroke-dasharray 950ms linear,stroke var(--t3) var(--e-out);
+  filter:drop-shadow(0 1.5px 2px var(--depth))}
+.focus[data-over="1"] .fr-arc{stroke:var(--yellow)}
+/* A round cap on a zero-length arc still draws a dot, which reads as a
+   timer that has already started when none has. */
+.focus[data-run="0"] .fr-arc{opacity:0}
+.focus-stage .focus-char{grid-area:1/1;height:calc(var(--stage) * .84);width:auto;position:relative;
+  /* Softer than it was: the contact shadow is its own element now, on the
+     ground where it belongs, so this only has to give the figure some form. */
+  filter:drop-shadow(0 6px 9px color-mix(in oklab,var(--depth) 42%,transparent))}
+/* A bounce only reads as a bounce if the ground agrees. This tightens and
+   fades as they leave it and spreads as they land — which is most of why the
+   jog looks like a jog rather than a picture sliding up and down. */
+.focus-shade{position:absolute;left:50%;bottom:5.7%;width:30%;margin-left:-15%;
+  height:4.6%;border-radius:50%;pointer-events:none;opacity:.6;
+  background:radial-gradient(closest-side,
+    color-mix(in oklab,var(--depth) 95%,transparent) 0%,transparent 100%)}
+
+.focus-title{font-size:1.45rem;line-height:1.25;max-width:19ch;margin:4px 0 0}
+.focus-time{font-size:2.85rem;font-weight:900;letter-spacing:-.025em;line-height:1.12;
+  font-variant-numeric:tabular-nums;margin-top:8px;
+  color:color-mix(in oklab,var(--topic,var(--ink)) 42%,var(--ink))}
+.focus-time:empty{display:none}
+.focus[data-over="1"] .focus-time{color:var(--yellow)}
+.focus-sub{font-size:.84rem;color:var(--ink-2);font-weight:700;max-width:30ch;margin-top:4px}
+.focus-mins{justify-content:center;margin-top:14px;max-width:330px}
+.focus-mins[hidden]{display:none}
+
+/* ── What the character is doing, told in motion ──────────
+   There is one drawing per body, so what says which activity this is has to
+   be how they move. Each one gets its own path rather than the same bob at a
+   different speed: jogging is a real bounce with a squash on landing, stirring
+   sways around the feet, eating lifts and lowers, washing is a small fast
+   scrub, desk work is barely a breath. Nothing matched gets a calm rise and
+   fall — present, not pretending to be busy.
+
+   Two rules hold the whole set together. Every keyframe of an animation lists
+   the same transform functions in the same order, so the browser interpolates
+   them one at a time instead of falling back to matrix maths and quietly
+   rounding the corners off a rotation. And the pivot sits at the feet: a
+   standing figure leans, it does not spin.
+
+   All of it works the same whether the file underneath is the real pose or the
+   idle one standing in for it, which is what makes the activity readable today
+   and better later rather than absent until the art lands. */
+.focus-stage .focus-char{transform-origin:50% 97%}
+
+@keyframes poseNone{
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  50%    {transform:translateX(0) translateY(-6px) rotate(0deg) scaleY(1)}}
+/* Up fast and slowing, down accelerating — gravity, roughly. Even timing here
+   reads as floating, which is the one thing a jog must not do. */
+@keyframes poseMove{
+  0%     {transform:translateX(0) translateY(0) rotate(0deg) scaleY(.972);
+          animation-timing-function:cubic-bezier(.2,.72,.4,1)}
+  22%    {transform:translateX(0) translateY(-13px) rotate(-2.6deg) scaleY(1.02);
+          animation-timing-function:cubic-bezier(.58,0,.82,.34)}
+  46%    {transform:translateX(0) translateY(0) rotate(0deg) scaleY(.972);
+          animation-timing-function:cubic-bezier(.2,.72,.4,1)}
+  70%    {transform:translateX(0) translateY(-10px) rotate(2.6deg) scaleY(1.016);
+          animation-timing-function:cubic-bezier(.58,0,.82,.34)}
+  100%   {transform:translateX(0) translateY(0) rotate(0deg) scaleY(.972)}}
+@keyframes poseCook{
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  25%    {transform:translateX(5px) translateY(-1px) rotate(2.4deg) scaleY(1)}
+  50%    {transform:translateX(0) translateY(-3px) rotate(0deg) scaleY(1)}
+  75%    {transform:translateX(-5px) translateY(-1px) rotate(-2.4deg) scaleY(1)}}
+@keyframes poseEat{
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  32%    {transform:translateX(0) translateY(-6px) rotate(-1.8deg) scaleY(1)}
+  64%    {transform:translateX(0) translateY(-1px) rotate(.9deg) scaleY(1)}}
+@keyframes poseWash{
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  25%    {transform:translateX(3px) translateY(-2px) rotate(1deg) scaleY(1)}
+  50%    {transform:translateX(0) translateY(-1px) rotate(0deg) scaleY(1)}
+  75%    {transform:translateX(-3px) translateY(-2px) rotate(-1deg) scaleY(1)}}
+@keyframes poseStudy{
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  50%    {transform:translateX(0) translateY(-3px) rotate(0deg) scaleY(1.014)}}
+@keyframes poseCheer{
+  0%     {transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  28%    {transform:translateX(0) translateY(-20px) rotate(0deg) scaleY(1.05)}
+  54%    {transform:translateX(0) translateY(0) rotate(0deg) scaleY(.95)}
+  76%    {transform:translateX(0) translateY(-7px) rotate(0deg) scaleY(1.02)}
+  100%   {transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}}
+
+@keyframes shadeSoft{
+  0%,100%{transform:translateX(0) scale(1);opacity:.6}
+  50%    {transform:translateX(0) scale(.9);opacity:.46}}
+@keyframes shadeBounce{
+  0%     {transform:translateX(0) scale(1.04);opacity:.62}
+  22%    {transform:translateX(0) scale(.72);opacity:.3}
+  46%    {transform:translateX(0) scale(1.04);opacity:.62}
+  70%    {transform:translateX(0) scale(.8);opacity:.36}
+  100%   {transform:translateX(0) scale(1.04);opacity:.62}}
+@keyframes shadeSway{
+  0%,100%{transform:translateX(0) scale(1);opacity:.58}
+  25%    {transform:translateX(4px) scale(.97);opacity:.53}
+  50%    {transform:translateX(0) scale(1);opacity:.58}
+  75%    {transform:translateX(-4px) scale(.97);opacity:.53}}
+@keyframes shadeHop{
+  0%     {transform:translateX(0) scale(1);opacity:.6}
+  28%    {transform:translateX(0) scale(.64);opacity:.26}
+  54%    {transform:translateX(0) scale(1.08);opacity:.64}
+  76%    {transform:translateX(0) scale(.86);opacity:.42}
+  100%   {transform:translateX(0) scale(1);opacity:.6}}
+
+/* One length per activity, shared by the figure and its shadow, so the two can
+   never drift out of step. */
+.focus[data-run="1"]                    {--pose-t:3.1s}
+.focus[data-run="1"][data-pose="move"]  {--pose-t:.64s}
+.focus[data-run="1"][data-pose="cook"]  {--pose-t:1.5s}
+.focus[data-run="1"][data-pose="eat"]   {--pose-t:2.2s}
+.focus[data-run="1"][data-pose="wash"]  {--pose-t:.66s}
+.focus[data-run="1"][data-pose="study"] {--pose-t:4.6s}
+
+.focus[data-run="1"] .focus-char {animation:poseNone var(--pose-t) ease-in-out infinite}
+.focus[data-run="1"] .focus-shade{animation:shadeSoft var(--pose-t) ease-in-out infinite}
+.focus[data-run="1"][data-pose="move"]  .focus-char {animation-name:poseMove}
+.focus[data-run="1"][data-pose="move"]  .focus-shade{animation-name:shadeBounce}
+.focus[data-run="1"][data-pose="cook"]  .focus-char {animation-name:poseCook}
+.focus[data-run="1"][data-pose="cook"]  .focus-shade{animation-name:shadeSway}
+.focus[data-run="1"][data-pose="eat"]   .focus-char {animation-name:poseEat}
+.focus[data-run="1"][data-pose="wash"]  .focus-char {animation-name:poseWash}
+.focus[data-run="1"][data-pose="wash"]  .focus-shade{animation-name:shadeSway}
+.focus[data-run="1"][data-pose="study"] .focus-char {animation-name:poseStudy}
+
+@keyframes poseWork{
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  50%    {transform:translateX(0) translateY(-4px) rotate(0deg) scaleY(1.008)}}
+/* Her exercise drawing is a standing stretch rather than a run, so it leans
+   further into the stretch and eases back out instead of bouncing. */
+@keyframes poseStretch{
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  50%    {transform:translateX(0) translateY(-2px) rotate(-1.7deg) scaleY(1.018)}}
+.focus[data-run="1"][data-pose="work"]{--pose-t:3.4s}
+.focus[data-run="1"][data-pose="work"] .focus-char{animation-name:poseWork}
+.focus[data-run="1"][data-pose="move"][data-body="f"]{--pose-t:2.8s}
+.focus[data-run="1"][data-pose="move"][data-body="f"] .focus-char {animation-name:poseStretch}
+.focus[data-run="1"][data-pose="move"][data-body="f"] .focus-shade{animation-name:shadeSoft}
+
+/* ── Effects ─────────────────────────────────────────────
+   Three particles, parked and invisible, given a job by whatever pose is on
+   screen: steam off the pan, warmth off the food, a puff of dust under a
+   running foot, dots over a head that is thinking, a burst when something is
+   finished. They are tinted out of --ink rather than painted white, so one
+   rule reads as pale smoke on the dark theme and a soft grey smudge on the
+   light one instead of vanishing into the cream.
+
+   The layer is a second grid item sitting exactly on top of the picture —
+   same height, same aspect ratio, same cell — so every position below is a
+   percentage of the character rather than of the screen, and none of it
+   drifts when the stage resizes. The ratio is the shared canvas the import
+   writes; it is the one number here that knows about the files. */
+.fx{grid-area:1/1;position:relative;height:calc(var(--stage) * .84);
+  aspect-ratio:361/570;pointer-events:none}
+.fx i{position:absolute;display:none;border-radius:50%;opacity:0;
+  left:50%;top:40%;width:10px;height:10px;
+  background:radial-gradient(closest-side,
+    color-mix(in oklab,var(--ink) 62%,transparent) 0%,
+    color-mix(in oklab,var(--ink) 34%,transparent) 58%,transparent 100%)}
+
+@keyframes steam{
+  0%     {opacity:0;transform:translate(-50%,0) scale(.45)}
+  22%    {opacity:.9;transform:translate(-50%,-12px) scale(.85)}
+  100%   {opacity:0;transform:translate(-56%,-62px) scale(1.75)}}
+@keyframes puff{
+  0%     {opacity:0;transform:translate(-50%,0) scale(.4)}
+  26%    {opacity:.72;transform:translate(-50%,-2px) scale(.9)}
+  100%   {opacity:0;transform:translate(-50%,-6px) scale(1.9)}}
+@keyframes think{
+  0%,100%{opacity:0;transform:translate(-50%,0) scale(.65)}
+  32%    {opacity:.95;transform:translate(-50%,-3px) scale(1)}
+  66%    {opacity:0;transform:translate(-50%,-7px) scale(.8)}}
+@keyframes spark{
+  0%     {opacity:0;transform:translate(-50%,-50%) scale(.25)}
+  22%    {opacity:1}
+  100%   {opacity:0;transform:translate(calc(-50% + var(--sx)),calc(-50% + var(--sy))) scale(1.15)}}
+
+/* Steam off the pan. The anchor is the pan in the cooking drawing, which is
+   in the same place in both bodies' versions of it. */
+.focus[data-run="1"][data-pose="cook"] .fx i{display:block;animation:steam 2.9s ease-out infinite;
+  width:13px;height:13px}
+.focus[data-pose="cook"] .fx i:nth-child(1){left:38%;top:39%}
+.focus[data-pose="cook"] .fx i:nth-child(2){left:44%;top:37%;width:11px;height:11px;animation-delay:.95s}
+.focus[data-pose="cook"] .fx i:nth-child(3){left:33%;top:41%;width:10px;height:10px;animation-delay:1.9s}
+
+/* Same idea off the food, smaller and slower — they are eating, not frying. */
+.focus[data-run="1"][data-pose="eat"] .fx i{display:block;animation:steam 3.4s ease-out infinite;
+  width:10px;height:10px}
+.focus[data-pose="eat"] .fx i:nth-child(1){left:48%;top:38%}
+.focus[data-pose="eat"] .fx i:nth-child(2){left:54%;top:36%;width:8px;height:8px;animation-delay:1.2s}
+.focus[data-pose="eat"] .fx i:nth-child(3){left:43%;top:39%;width:7px;height:7px;animation-delay:2.3s}
+
+/* Dust under the running foot, on the beat of the bounce. Hers is a standing
+   stretch, so she does not kick any up. */
+.focus[data-run="1"][data-pose="move"][data-body="m"] .fx i{display:block;
+  animation:puff var(--pose-t) ease-out infinite;width:30px;height:11px}
+.focus[data-pose="move"] .fx i:nth-child(1){left:44%;top:95%}
+.focus[data-pose="move"] .fx i:nth-child(2){left:58%;top:96%;width:18px;height:7px;animation-delay:.32s}
+/* Two puffs, not three — and the rule that hides the spare has to carry the
+   same weight as the one that shows the set, or it quietly loses and parks a
+   stray dot in the corner. */
+.focus[data-run="1"][data-pose="move"][data-body="m"] .fx i:nth-child(3){display:none}
+
+/* Thinking, over the head — higher for the one who is standing up. */
+.focus[data-run="1"][data-pose="study"] .fx i,
+.focus[data-run="1"][data-pose="work"] .fx i{display:block;width:10px;height:10px;
+  animation:think 2.5s ease-in-out infinite}
+.focus[data-pose="study"] .fx i:nth-child(1){left:70%;top:15%}
+.focus[data-pose="study"] .fx i:nth-child(2){left:77%;top:10%;width:8px;height:8px;animation-delay:.3s}
+.focus[data-pose="study"] .fx i:nth-child(3){left:84%;top:5%;width:7px;height:7px;animation-delay:.6s}
+.focus[data-pose="work"] .fx i:nth-child(1){left:64%;top:7%}
+.focus[data-pose="work"] .fx i:nth-child(2){left:71%;top:4%;width:8px;height:8px;animation-delay:.3s}
+.focus[data-pose="work"] .fx i:nth-child(3){left:78%;top:1%;width:7px;height:7px;animation-delay:.6s}
+
+/* And the one burst in the app, for the second after something is finished. */
+.focus[data-cheer="1"] .fx i{display:block;width:11px;height:11px;
+  animation:spark 780ms var(--e-out) forwards;
+  background:radial-gradient(closest-side,var(--yellow) 0%,transparent 100%)}
+.focus[data-cheer="1"] .fx i:nth-child(1){left:52%;top:16%;--sx:-34px;--sy:-26px}
+.focus[data-cheer="1"] .fx i:nth-child(2){left:58%;top:12%;--sx:30px;--sy:-30px;
+  animation-delay:.07s;background:radial-gradient(closest-side,var(--topic,var(--blue)) 0%,transparent 100%)}
+.focus[data-cheer="1"] .fx i:nth-child(3){left:46%;top:22%;--sx:-8px;--sy:-44px;animation-delay:.14s}
+
+.focus[data-cheer="1"] .focus-char {animation:poseCheer 820ms var(--e-back)}
+.focus[data-cheer="1"] .focus-shade{animation:shadeHop 820ms var(--e-back)}
+
+@media (prefers-reduced-motion:reduce){
+  .focus{animation:none}
+  .focus-char,.focus-shade{animation:none!important}
+  .fx i{display:none!important}
+  .fr-arc{transition:none}
+}
+
+/* ═══════════ THE CHARACTER ELSEWHERE ═══════════ */
+/* A tab heading is a row with a title on the left and, now, someone standing
+   at the end of it. `.headrow` is the same shape the Tasks heading already
+   built inline; History gets it too so both sit the same way. */
+.headrow{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+/* Bottom-aligned to the heading block, with the same soft smudge under the
+   feet that Today uses — without it they float half an inch off the page. */
+.tabchar{flex:none;align-self:flex-end;display:grid;place-items:end center;
+  padding:0 6px 3px;
+  background:radial-gradient(40% 8% at 50% 97%,
+    color-mix(in oklab,var(--depth) 72%,transparent) 0%,transparent 72%)}
+.tabchar .char{height:var(--tab-char-h,60px);
+  filter:drop-shadow(0 4px 5px color-mix(in oklab,var(--depth) 62%,transparent))}
+/* The empty screens are the ones with room for them. */
+.tabchar-big{--tab-char-h:112px;align-self:center;padding-bottom:4px;margin-bottom:-2px}

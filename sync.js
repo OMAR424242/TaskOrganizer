@@ -13,6 +13,10 @@
        background chore, never something you wait for.
      · Sync is pull → merge → push, serialised so two of them can't
        overlap.
+     · A 45-second poll is the floor; a realtime subscription is the
+       ceiling, waking a sync the moment another device's change lands
+       instead of waiting out the poll. Losing the realtime connection
+       just quietly drops back to the floor.
 
    The merge is the part worth reading. Last-write-wins on the whole
    document is easy and loses things — finish a task on your phone while
@@ -50,6 +54,7 @@ window.OTSync = (function () {
   var chain = Promise.resolve();
   var pushTimer = null;
   var poll = null;
+  var channel = null;
 
   var TABLE = 'app_state';
 
@@ -92,8 +97,8 @@ window.OTSync = (function () {
         var changed = (next && next.id) !== (user && user.id);
         user = next;
         if (changed) {
-          if (user) { setStatus('busy'); startPolling(); sync(); }
-          else { setStatus('signedout'); stopPolling(); }
+          if (user) { setStatus('busy'); startPolling(); startRealtime(); sync(); }
+          else { setStatus('signedout'); stopPolling(); stopRealtime(); }
         }
       });
       return sb;
@@ -298,10 +303,38 @@ window.OTSync = (function () {
   function startPolling() {
     stopPolling();
     // Cheap, predictable, and it survives a sleeping phone in a way a
-    // websocket does not. A single row is a very small read.
+    // websocket does not. A single row is a very small read. This stays on
+    // even with realtime below also running, as the thing that still works
+    // if a realtime connection has dropped without saying so, or if the
+    // table was never opened up for it on this project.
     poll = setInterval(function () { if (user && navigator.onLine) sync(); }, 45000);
   }
   function stopPolling() { if (poll) clearInterval(poll); poll = null; }
+
+  /* A second device's change otherwise waits for the next poll — up to 45
+     seconds, on the device that did not make it — which reads as "sync is
+     slow" even though the push out was already quick. Realtime closes that
+     gap: the moment the row changes on the server, every other open tab or
+     device hears about it and pulls right away. Best-effort only — if the
+     table was never added to the `supabase_realtime` publication (see
+     supabase/schema.sql) this simply never fires and polling alone still
+     covers it, silently. */
+  function startRealtime() {
+    stopRealtime();
+    if (!user) return;
+    var forUser = user.id;
+    client().then(function (c) {
+      if (!user || user.id !== forUser) return;   // signed out while this was loading
+      channel = c.channel('app_state_' + forUser)
+        .on('postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: TABLE, filter: 'user_id=eq.' + forUser },
+          function () { if (user) sync(); })
+        .subscribe();
+    }).catch(function () {});
+  }
+  function stopRealtime() {
+    if (channel) { try { sb.removeChannel(channel); } catch (e) {} channel = null; }
+  }
 
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden && user && navigator.onLine) sync();
@@ -323,7 +356,7 @@ window.OTSync = (function () {
       client().then(function (c) { return c.auth.getSession(); })
         .then(function (r) {
           var s = r && r.data && r.data.session;
-          if (s && s.user) { user = s.user; setStatus('busy'); startPolling(); sync(); }
+          if (s && s.user) { user = s.user; setStatus('busy'); startPolling(); startRealtime(); sync(); }
           else setStatus('signedout');
         })
         .catch(function (e) { setStatus('err', friendly(e)); });
@@ -370,7 +403,7 @@ window.OTSync = (function () {
       // so signing out is never how someone loses an afternoon.
       return sync().then(function () { return client(); })
         .then(function (c) { return c.auth.signOut(); })
-        .then(function () { user = null; stopPolling(); setStatus('signedout'); });
+        .then(function () { user = null; stopPolling(); stopRealtime(); setStatus('signedout'); });
     },
 
     friendly: friendly,

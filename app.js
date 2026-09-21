@@ -91,8 +91,9 @@
   /* ── State ────────────────────────────────────────────── */
   function fresh() {
     return {
-      name: '', avatar: '', dayStart: 4, theme: '', uid: 200,
+      name: '', avatar: '', dayStart: 4, theme: '', font: '', uid: 200,
       wall: { k: 'none' }, wallDim: 58, onboarded: false, sound: true,
+      petName: '', petColor: '', petSex: 'm',
       topics: [
         { id: 't1', n: 'Personal',    sw: 'purple' },
         { id: 't2', n: 'Health',      sw: 'green'  },
@@ -104,6 +105,9 @@
          clear before you can start — the opposite of what this app is for.
          The welcome flow asks for the real ones instead. */
       library: [],
+      // The one task with a timer on it, if any: { id, at, mins, rang }.
+      // One at a time, on purpose — see openFocus().
+      focus: null,
       day: null, history: [], removed: [], libDel: [], topDel: []
     };
   }
@@ -119,6 +123,11 @@
   if (!S.wall) S.wall = { k: 'none' };
   if (typeof S.wallDim !== 'number') S.wallDim = 58;
   if (typeof S.sound !== 'boolean') S.sound = true;
+  if (typeof S.font !== 'string') S.font = '';
+  if (typeof S.petName !== 'string') S.petName = '';
+  if (typeof S.petColor !== 'string') S.petColor = '';
+  if (typeof S.petSex !== 'string') S.petSex = 'm';
+  if (!S.focus || typeof S.focus !== 'object') S.focus = null;
 
   /* The build before this one seeded eight example tasks. If a device still
      has exactly those, with nothing finished and nothing of its own added,
@@ -168,6 +177,7 @@
     if (document.hidden) flushSave();
   });
   if (S.theme) document.documentElement.setAttribute('data-theme', S.theme);
+  if (S.font) document.documentElement.setAttribute('data-font', S.font);
 
   /* ── Repeat rules ──────────────────────────────────────
      none  · once, sits in the library until you pick it
@@ -372,7 +382,12 @@
                                  { f: 1040, d: .1, g: .05, at: .06 }] },
     finale: { w: 'sine',     n: [{ f: 660, d: .5, g: .06 },
                                  { f: 880, d: .5, g: .055, at: .09 },
-                                 { f: 1320, d: .55, g: .05, at: .18 }] }
+                                 { f: 1320, d: .55, g: .05, at: .18 }] },
+    /* A timer running out is information, not applause — the task is not
+       finished, the clock simply passed the number you picked. Two soft
+       notes, well short of `finale`, and nothing at all if sound is off. */
+    time:   { w: 'sine',     n: [{ f: 740, d: .26, g: .05 },
+                                 { f: 988, d: .34, g: .045, at: .16 }] }
   };
   function play(kind) {
     if (!S || !S.sound) return;
@@ -461,7 +476,7 @@
   /* `colours` holds one hex per finished segment. The ring ends the day as a
      picture of what the day was made of, rather than a uniform green bar. */
   function ringSvg(total, colours, px) {
-    var R = px / 2 - 11, C = 2 * Math.PI * R, n = Math.max(total, 1);
+    var R = px / 2 - 13, C = 2 * Math.PI * R, n = Math.max(total, 1);
     var gap = n === 1 ? 0 : Math.min(13, C * 0.034);
     var seg = Math.max((C - gap * n) / n, 2);
     var out = '<svg width="' + px + '" height="' + px + '" viewBox="0 0 ' + px + ' ' + px +
@@ -469,7 +484,7 @@
     for (var i = 0; i < n; i++) {
       var c = colours[i];
       out += '<circle class="seg' + (c ? '' : ' empty') + '" cx="' + px / 2 + '" cy="' + px / 2 +
-        '" r="' + R + '" stroke-width="8"' + (c ? ' stroke="' + c + '"' : '') +
+        '" r="' + R + '" stroke-width="11"' + (c ? ' stroke="' + c + '"' : '') +
         ' stroke-dasharray="' + seg.toFixed(2) + ' ' + (C - seg).toFixed(2) +
         '" stroke-dashoffset="' + (-(i * (seg + gap))).toFixed(2) + '"/>';
     }
@@ -528,16 +543,232 @@
     return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   }
 
+  /* ── A small companion, not a system ────────────────────
+     No level bar, no health, nothing that can go down — because it has no
+     daily state at all. What it reads is one number that can only ever
+     grow: how many things you have finished with this app, all time. It
+     grows a few times over the life of the app and then stops, on purpose.
+     The point is to notice a long arc of effort without turning that into
+     a new thing to track every day — today's count is never part of this,
+     only the running total already sitting in S.history. */
+  var PET_STAGES = [50, 100, 250]; // lifetime finishes needed for stage 1, 2, 3
+  function petStage() {
+    var n = S.history.length, s = 0;
+    for (var i = 0; i < PET_STAGES.length; i++) if (n >= PET_STAGES[i]) s = i + 1;
+    return s;
+  }
+  /* A line in its own voice at each stage — the same "narrative, not a
+     number" idea as the stage system itself. It says nothing the profile
+     stats don't already say more precisely; the point is how it says it. */
+  var PET_LINES = [
+    'New around here. Let’s see where this goes.',
+    'Fifty things, done. Starting to notice a pattern.',
+    'A hundred now. This is a habit, not a streak.',
+    'Two-fifty and counting. Still here because you are.'
+  ];
+  function petLine(stage) { return PET_LINES[stage] || PET_LINES[PET_LINES.length - 1]; }
+  // '' (never customised) renders as the original fixed blue via the CSS
+  // fallback in --pet-hue — this only ever returns a value once someone
+  // has actually chosen a colour.
+  function petHue() { return S.petColor ? swatchColor(S.petColor) : ''; }
+  /* The companion is a rendered character now rather than a drawn shape.
+     One file per body per pose, and the lifetime stage is carried by how
+     tall it is drawn (see --char-h in the stylesheet) instead of by
+     redrawing it — which is what lets four stages exist without four
+     separate pictures of each pose.
+
+     Every picture the app has lives in this table and nowhere else. A pose
+     with no art yet is null, and charSrc falls back to that body's idle
+     rather than ever asking for a file that is not there. That fallback is
+     the whole reason the pose system can ship ahead of the pictures: the
+     matching, the timer and the focus view all work today against one
+     drawing each, and every file that lands afterwards turns a fallback
+     into the real thing without a line changing here or anywhere else.
+
+     A body is only offered in the picker if its idle exists. */
+  var CHAR_ART = {
+    m: {
+      idle:  './art/char-m-idle.webp',
+      cook:  './art/char-m-cook.webp',
+      move:  './art/char-m-move.webp',
+      eat:   './art/char-m-eat.webp',
+      study: './art/char-m-study.webp',
+      work:  './art/char-m-work.webp',
+      cheer: './art/char-m-cheer.webp',
+      wash:  null
+    },
+    f: {
+      idle:  './art/char-f-idle.webp',
+      cook:  './art/char-f-cook.webp',
+      move:  './art/char-f-move.webp',
+      eat:   './art/char-f-eat.webp',
+      study: './art/char-f-study.webp',
+      work:  './art/char-f-work.webp',
+      cheer: './art/char-f-cheer.webp',
+      wash:  null
+    }
+  };
+  function charSex() { return (CHAR_ART[S.petSex] || {}).idle ? S.petSex : 'm'; }
+  function charSrc(pose) {
+    var set = CHAR_ART[charSex()];
+    return set[pose] || set.idle;
+  }
+  /* The same character, small, standing in a tab heading. Not a control and
+     not a status — just them being somewhere other than Today, so the rest of
+     the app reads as the same place rather than three screens that happen to
+     share a tab bar. */
+  function charBadge(pose, big) {
+    return '<span class="tabchar' + (big ? ' tabchar-big' : '') + '" aria-hidden="true">' +
+      charTag(pose) + '</span>';
+  }
+  function charTag(pose, cls) {
+    return '<img class="char' + (cls ? ' ' + cls : '') + '" src="' +
+      charSrc(pose || 'idle') + '" alt="" draggable="false">';
+  }
+
+  /* ── What the character is doing ───────────────────────
+     A task is a line of free text somebody typed in a hurry, so the pose
+     has to be read out of it. First list to match wins, which is the whole
+     reason the order is what it is: cooking sits above eating because
+     "cook dinner" is cooking, and above washing because "wash up" is the
+     kitchen sink, not your face. Desk work sits last because its list is
+     the broadest and would otherwise swallow things the others describe
+     better.
+
+     A key ending in * matches any word starting with it, so run/runs/
+     running need one entry between them. Everything else has to match a
+     whole word: prefix-matching something as short as "tea" quietly turns
+     every team meeting into a coffee break.
+
+     Nothing matching is the common case, not a failure — most tasks are not
+     one of five activities, and this returns '' for those. They stand there
+     working, in the idle drawing, with the calm default motion. They do not
+     get the finishing pose: that one is arms-up, and holding arms-up for
+     twenty-five minutes of paying bills would be a lie. It plays for a
+     second and a half when something is actually ticked off, which is the
+     moment it is about. */
+  var POSE_WORDS = [
+    ['cook',  ['cook*','bak*','recipe*','kitchen','dish*','chop*','roast*','fry','frying',
+               'oven','grill*','simmer*','marinat*','dinnertime']],
+    ['move',  ['gym','workout*','exercis*','run','runs','running','jog*','walk*','hike',
+               'hikes','hiking','stretch*','yoga','lift*','weights','cardio','swim*','bike',
+               'bikes','biking','cycl*','train','training','sport*','pushup*','squat*',
+               'pilates','treadmill','football','basketball','tennis','boxing','danc*','steps']],
+    ['eat',   ['eat*','ate','breakfast','lunch*','dinner','supper','brunch','snack*','food',
+               'meal*','drink*','hydrat*','coffee','tea','juice','smoothie','protein',
+               'vitamin*','supplement*','meds','medication*','pill*']],
+    ['wash',  ['shower*','bath','bathe','wash*','brush*','teeth','tooth','floss*','skincare',
+               'skin','face','shav*','hair','nails','groom*','hygiene','moisturis*',
+               'moisturiz*','sunscreen','deodorant','makeup','shampoo*']],
+    ['study', ['stud*','read*','homework','essay*','assignment*','revis*','exam*','note',
+               'notes','lecture*','class','classes','course*','book','books','chapter*',
+               'learn*','journal*','practic*','research*','flashcard*','thesis']],
+    /* Two desk poses came back from the same sheet — one sitting with a book,
+       one standing with a laptop — so reading and screen work stopped having
+       to share a drawing. Studying is the seated one; everything that is
+       really admin is the laptop. */
+    ['work',  ['work*','writ*','email*','inbox','report*','draft*','cod*','admin',
+               'paperwork','invoic*','budget*','pay','bill*','form','forms','tax','taxes',
+               'apply','applic*','plan','plans','planning','review*','spreadsheet*',
+               'slides','deck','cv','resume','meeting*','project*','expenses','sort*',
+               'file','filing','submit','renew*','book*ing','print*']]
+  ];
+  /* The handful of two-word phrases the lists above would read the wrong way
+     round on their own. "Wash up" is the sink, not your face, and no amount
+     of reordering the lists fixes that without breaking the other one. */
+  var POSE_PHRASES = [
+    ['cook', ['wash up', 'washing up', 'meal prep']],
+    ['move', ['work out', 'press up', 'sit up', 'push up']]
+  ];
+  function taskPose(title) {
+    var words = String(title || '').toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, ' ').split(/[\s-]+/).filter(Boolean);
+    var flat = words.join(' ');
+    for (var p = 0; p < POSE_PHRASES.length; p++) {
+      for (var q = 0; q < POSE_PHRASES[p][1].length; q++) {
+        if (flat.indexOf(POSE_PHRASES[p][1][q]) > -1) return POSE_PHRASES[p][0];
+      }
+    }
+    for (var i = 0; i < POSE_WORDS.length; i++) {
+      var keys = POSE_WORDS[i][1];
+      for (var w = 0; w < words.length; w++) {
+        for (var k = 0; k < keys.length; k++) {
+          var key = keys[k];
+          if (key.slice(-1) === '*'
+              ? words[w].indexOf(key.slice(0, -1)) === 0
+              : words[w] === key) return POSE_WORDS[i][0];
+        }
+      }
+    }
+    return '';
+  }
+  /* The one moment it is allowed to make a small fuss — right after you
+     finish something. Most finishes just get a small bump; crossing an
+     evolution threshold gets a bigger moment (the toast announcing it is
+     the caller's job — see finish() — since a second toast() call here
+     would just delete the one already on screen). Either way there is no
+     opposite version of this function — nothing here ever plays a losing
+     animation, because there is no losing count to read. */
+  /* How long the finishing pose holds before the character goes back to
+     standing. Long enough to register, over before the toast is. The window
+     is a timestamp rather than a class on the element because Today gets
+     rebuilt from scratch a fifth of a second into it — renderToday reads
+     the same window, so the pose survives the repaint instead of being
+     wiped by it. */
+  var CHEER_MS = 1500;
+  var cheerUntil = 0, cheerT = null;
+  function cheering() { return Date.now() < cheerUntil; }
+  function bumpPet(evolved) {
+    var p = document.getElementById('pet');
+    if (!p) return;
+    p.dataset.stage = petStage();
+    if (!reduce) {
+      cheerUntil = Date.now() + CHEER_MS;
+      if (cheerT) clearTimeout(cheerT);
+      cheerT = setTimeout(function () {
+        cheerUntil = 0; cheerT = null;
+        var q = document.getElementById('pet');
+        if (q) q.innerHTML = charTag('idle');   // may be long gone; fine
+      }, CHEER_MS);
+    }
+    p.innerHTML = charTag(cheering() ? 'cheer' : 'idle');
+    if (reduce) return;
+    p.classList.remove('bump', 'evolve'); void p.offsetWidth;
+    p.classList.add(evolved ? 'evolve' : 'bump');
+  }
+
+  /* The floating add button lives once in index.html rather than being
+     rebuilt with every render — it only needs showing, hiding, and one
+     click handler for the whole life of the app. Visible only where it
+     earns its keep: Today, with something open already on it. The two
+     empty states already carry their own centred button and a second one
+     floating over a mostly empty screen would be clutter, not help. */
+  function updateFab() {
+    var fab = document.getElementById('fab');
+    if (!fab) return;
+    fab.classList.toggle('hidden', !(tab === 'today' && S.day && openIds().length > 0));
+  }
+
   function rowHtml(t, done) {
     var tp = topic(t.top), r = repLabel(t.rep);
-    return '<li class="row' + (done ? ' done' : '') + '" data-id="' + t.id +
-      '" style="--topic:' + topColor(t.top) + '">' +
+    var timed = !done && !!S.focus && S.focus.id === t.id;
+    var inner = '<span class="row-title">' + esc(t.t) + '</span>' +
+      '<span class="row-sub"><b>' + esc(tp.n) + '</b>' + (r ? ' · ' + esc(r) : '') +
+      '</span>';
+    return '<li class="row' + (done ? ' done' : '') + (timed ? ' timing' : '') +
+      '" data-id="' + t.id + '" style="--topic:' + topColor(t.top) + '">' +
       '<button class="cbx' + (done ? ' on' : '') + '" type="button" aria-label="' +
         (done ? 'Put back ' : 'Finish ') + esc(t.t) + '">' +
         '<svg viewBox="0 0 24 24"><path pathLength="1" d="M5 12.5l4.6 4.6L19 7"/></svg></button>' +
-      '<span class="row-body"><span class="row-title">' + esc(t.t) + '</span>' +
-      '<span class="row-sub"><b>' + esc(tp.n) + '</b>' + (r ? ' · ' + esc(r) : '') +
-      '</span></span>' +
+      /* An open task's body is a real button: tapping the words is how you
+         get the focus view and a timer. A finished one is not — there is
+         nothing left to sit down and do. */
+      (done
+        ? '<span class="row-body">' + inner + '</span>'
+        : '<button class="row-body" type="button" data-act="focus" aria-label="Focus on ' +
+          esc(t.t) + '">' + inner + '</button>') +
+      (timed ? '<span class="row-clock" data-clock aria-hidden="true">' +
+        focusLabel() + '</span>' : '') +
       /* Off today, not deleted. A repeating task lands here every morning
          whether or not today is the day for it, and without this the only
          way to clear one was to tick something you had not done. */
@@ -553,6 +784,7 @@
      ═══════════════════════════════════════════════════════ */
   function renderToday() {
     ensureDay();
+    pruneFocus();
     /* Replacing main's contents collapses its scroll height for an instant,
        and the browser pins scrollTop to 0 on the way through. Every add,
        every removal, every tick was quietly scrolling you back to the top of
@@ -569,7 +801,11 @@
           '<div class="ringmid"><span class="day-name">' + dayName(S.day.key) + '</span>' +
           '<span class="ringcount">' + (total ? done + ' of ' + total : 'nothing yet') +
           '</span></div></div></div>' +
-        '<p class="greeting">' + esc(greeting()) + '</p>') +
+        '<div class="petrow"><button type="button" class="pet" id="pet" data-stage="' +
+          petStage() + '"' + (petHue() ? ' style="--pet-hue:' + esc(petHue()) + '"' : '') +
+          ' aria-label="Customize ' + (S.petName ? esc(S.petName) : 'your companion') + '">' +
+          charTag(cheering() ? 'cheer' : 'idle') + '</button>' +
+        '<p class="greeting">' + esc(greeting()) + '</p></div>') +
       '<div id="body" style="margin-top:16px"></div>';
 
     var body = document.getElementById('body');
@@ -622,11 +858,9 @@
         (open.length
           ? '<div id="openList">' + openBlock + '</div>'
           : '<div class="empty"><h3>Nothing left on today</h3>' +
-            '<p class="small">Pick a few things from your list.</p></div>') +
-        '<button class="btn quiet" id="add" type="button" style="margin-top:14px">' +
-          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-          'stroke-width="2.2" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>' +
-          (open.length ? 'Add more to today' : 'Choose today\u2019s tasks') + '</button>' +
+            '<p class="small">Pick a few things from your list.</p>' +
+            '<button class="btn quiet" id="add" type="button" style="margin-top:8px;max-width:250px">' +
+              'Choose today\u2019s tasks</button></div>') +
         doneBlock;
       body.querySelectorAll('#openList .row').forEach(function (row) {
         var id = Number(row.dataset.id);
@@ -634,6 +868,8 @@
           finish(row, id, e.currentTarget); });
         row.querySelector('[data-act="off"]').addEventListener('click', function () {
           offToday(id); });
+        row.querySelector('[data-act="focus"]').addEventListener('click', function () {
+          openFocus(id); });
       });
     }
 
@@ -643,7 +879,10 @@
     });
     var addBtn = body.querySelector('#add');
     if (addBtn) addBtn.addEventListener('click', openPicker);
+    var petBtn = document.getElementById('pet');
+    if (petBtn) petBtn.addEventListener('click', openPet);
     if (keepY) main.scrollTop = keepY;
+    updateFab();
   }
 
   /* Off today, still in your list, still repeating tomorrow. Undoable,
@@ -664,6 +903,25 @@
     });
   }
 
+  /* The state half of finishing something, with no DOM in it, so the row's
+     checkbox and the focus view's Done button can share one definition of
+     what finished means rather than drifting apart. Returns whether the
+     companion crossed a stage, which is the only thing either caller wants
+     back from it. */
+  function commitFinish(id) {
+    var t = lib(id);
+    if (!t || S.day.done.indexOf(id) > -1) return false;
+    var stageBefore = petStage();
+    S.day.done.push(id);
+    if (!repeats(t)) t.doneAt = S.day.key;
+    S.history.push({ hid: 'h' + Date.now() + Math.random().toString(36).slice(2, 5),
+                     taskId: id, t: t.t, top: t.top, day: S.day.key, at: Date.now() });
+    // A timer on the thing you just finished has done its job.
+    if (S.focus && S.focus.id === id) S.focus = null;
+    save();
+    return petStage() > stageBefore;
+  }
+
   function finish(row, id, cbx) {
     if (row.dataset.busy) return;
     row.dataset.busy = '1';
@@ -677,15 +935,16 @@
     }
     row.classList.add('done');
 
-    S.day.done.push(id);
-    if (!repeats(t)) t.doneAt = S.day.key;
-    S.history.push({ hid: 'h' + Date.now() + Math.random().toString(36).slice(2, 5),
-                     taskId: id, t: t.t, top: t.top, day: S.day.key, at: Date.now() });
-    save();
+    var evolved = commitFinish(id);
+    bumpPet(evolved);
 
     var total = dayTotal(), left = openIds().length;
     paintRing(total);
-    toast('Finished “' + t.t + '”', function () { undoTask(id); });
+    // The pet's growth rides along on the same toast rather than showing
+    // its own — a second toast() call here would just delete this one the
+    // instant it appeared, since toast() only ever keeps the latest.
+    toast('Finished “' + t.t + '”' + (evolved ? ' — your companion grew!' : ''),
+      function () { undoTask(id); });
 
     // The row slides out of the open list and comes back, checked, under Done.
     // It is never simply gone.
@@ -695,6 +954,11 @@
     setTimeout(function () {
       row.classList.add('out');
       setTimeout(function () {
+        // A quick tap to another tab in this quarter-second is entirely
+        // possible, and by now that tab's own render already owns `main` —
+        // repainting Today here would stomp back over wherever you actually
+        // are. Only touch it if you are still looking at it.
+        if (tab !== 'today') return;
         if (left === 0 && total > 0) finale(); else renderToday();
       }, reduce ? 0 : 110);
     }, reduce ? 0 : 120);
@@ -734,8 +998,238 @@
     tick(18);
     if (ring && !reduce) {
       ring.classList.add('finale');
-      setTimeout(renderToday, 820);
-    } else { renderToday(); }
+      // Same reasoning as the setTimeout in finish(): only repaint Today if
+      // that is still what is on screen 820ms from now.
+      setTimeout(function () { if (tab === 'today') renderToday(); }, 820);
+    } else if (tab === 'today') { renderToday(); }
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     FOCUS
+     One task, one timer, one character getting on with it. The app is
+     called One Thing, so there is exactly one timer in the document and
+     starting a second moves it rather than stacking up a dashboard of
+     half-watched clocks.
+
+     What is stored is a start time and a length, never a number being
+     counted down. Reloading, backgrounding the app, or leaving the phone
+     face down for an hour all give the same answer when you come back, and
+     a missed interval tick cannot make time run slow. The interval only
+     ever repaints what the clock already says.
+     ═══════════════════════════════════════════════════════ */
+  var MINS = [5, 10, 15, 25, 45];
+
+  function focusSecs() { return S.focus ? Math.floor((Date.now() - S.focus.at) / 1000) : 0; }
+  /* null when there is no limit for anything to be left of — the "No limit"
+     chip is a stopwatch, and counts up until the task is ticked. */
+  function focusLeft() { return S.focus && S.focus.mins ? S.focus.mins * 60 - focusSecs() : null; }
+  function clock(s) {
+    s = Math.max(0, Math.round(s));
+    var h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+    return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) +
+      ':' + String(s % 60).padStart(2, '0');
+  }
+  function focusLabel() {
+    if (!S.focus) return '';
+    var left = focusLeft();
+    if (left === null) return clock(focusSecs());
+    return (left < 0 ? '+' : '') + clock(Math.abs(left));
+  }
+  /* A timer belongs to a task that is still on today and still unfinished.
+     Deleted, taken off the day, or ticked on another device and it is
+     quietly dropped — a clock counting down on something that no longer
+     exists is worse than no clock. */
+  function pruneFocus() {
+    if (!S.focus) return;
+    var t = lib(S.focus.id);
+    if (!(t && S.day && S.day.tasks.indexOf(t.id) > -1 && S.day.done.indexOf(t.id) < 0)) {
+      S.focus = null;
+      save();   // it has to actually go, or it is back on the next reload
+    }
+  }
+
+  var clockT = null;
+  function startClock() {
+    if (clockT || document.hidden || !S.focus) return;
+    clockT = setInterval(paintClocks, 1000);
+  }
+  function stopClock() { if (clockT) { clearInterval(clockT); clockT = null; } }
+  function paintClocks() {
+    var had = !!S.focus;
+    pruneFocus();
+    if (had && !S.focus && tab === 'today') renderToday();
+    paintFocus();
+    var label = focusLabel();
+    document.querySelectorAll('[data-clock]').forEach(function (n) { n.textContent = label; });
+    if (!S.focus) stopClock();
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) stopClock();
+    else if (S.focus) { paintClocks(); startClock(); }
+  });
+
+  function focusRing(p) {
+    return '<svg class="focus-ring" viewBox="0 0 100 100" aria-hidden="true">' +
+      '<circle class="fr-track" cx="50" cy="50" r="45.5" pathLength="1"/>' +
+      '<circle class="fr-arc" cx="50" cy="50" r="45.5" pathLength="1" ' +
+        'stroke-dasharray="' + p.toFixed(4) + ' 1"/></svg>';
+  }
+
+  var focusEl = null;
+
+  function openFocus(id) {
+    var t = lib(id);
+    if (!t) return;
+    closeFocus(true);
+    var pose = taskPose(t.t);
+    focusEl = el(
+      '<div class="focus" role="dialog" aria-modal="true" data-pose="' + (pose || 'none') + '" ' +
+        /* The body matters to the motion as well as the picture: his exercise
+           drawing is a run and hers is a standing stretch, and a jogging
+           bounce on a stretch looks like somebody who cannot keep still. */
+        'data-body="' + charSex() + '" ' +
+        'data-id="' + id + '" style="--topic:' + topColor(t.top) + '" ' +
+        'aria-label="Focus on ' + esc(t.t) + '">' +
+        '<div class="focus-bar"><button class="iconbtn" data-act="back" type="button" ' +
+          'aria-label="Back to today"><svg viewBox="0 0 24 24" fill="none" ' +
+          'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+          'stroke-linejoin="round"><path d="M6 9.5l6 6 6-6"/></svg></button></div>' +
+        '<div class="focus-mid">' +
+          '<div class="focus-stage">' + focusRing(0) +
+            '<span class="focus-shade"></span>' +
+            charTag(pose || 'idle', 'focus-char') +
+            '<span class="fx" aria-hidden="true"><i></i><i></i><i></i></span>' + '</div>' +
+          '<h2 class="focus-title">' + esc(t.t) + '</h2>' +
+          '<div class="focus-time" data-time></div>' +
+          '<p class="focus-sub" data-sub></p>' +
+          '<div class="pickrow focus-mins" data-mins>' +
+            MINS.map(function (m) {
+              return '<button class="pick" type="button" data-m="' + m + '" aria-pressed="' +
+                (t.mins === m) + '">' + m + ' min</button>'; }).join('') +
+            '<button class="pick" type="button" data-m="0" aria-pressed="' +
+              (t.mins === 0) + '">No limit</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="focus-acts">' +
+          '<button class="btn primary" data-act="done" type="button">Done</button>' +
+          '<button class="btn quiet" data-act="stop" type="button">Stop the timer</button>' +
+        '</div>' +
+      '</div>');
+    document.body.appendChild(focusEl);
+
+    focusEl.querySelector('[data-act="back"]').addEventListener('click', function () {
+      closeFocus(); });
+    focusEl.querySelector('[data-act="stop"]').addEventListener('click', function () {
+      stopFocus(id); });
+    focusEl.querySelector('[data-act="done"]').addEventListener('click', function () {
+      doneFromFocus(id); });
+    focusEl.querySelectorAll('[data-mins] .pick').forEach(function (b) {
+      b.addEventListener('click', function () { startFocus(id, Number(b.dataset.m)); });
+    });
+    document.addEventListener('keydown', function k(e) {
+      if (!focusEl) { document.removeEventListener('keydown', k); return; }
+      if (e.key === 'Escape') { closeFocus(); document.removeEventListener('keydown', k); }
+    });
+    tick(8);
+    paintFocus();
+    startClock();
+  }
+
+  function paintFocus() {
+    if (!focusEl) return;
+    var id = Number(focusEl.dataset.id), t = lib(id);
+    if (!t) { closeFocus(); return; }
+    var run = !!S.focus && S.focus.id === id;
+    var left = run ? focusLeft() : null;
+    var over = left !== null && left < 0;
+    focusEl.dataset.run = run ? '1' : '0';
+    focusEl.dataset.over = over ? '1' : '0';
+
+    var p = 0;
+    if (run) {
+      p = left === null
+        /* No limit still fills, just slowly — an hour is a full ring. It is
+           there to show that something is running, not to be read off. */
+        ? Math.min(1, focusSecs() / 3600)
+        : Math.min(1, Math.max(0, 1 - left / (S.focus.mins * 60)));
+    }
+    focusEl.querySelector('.fr-arc').setAttribute('stroke-dasharray', p.toFixed(4) + ' 1');
+    focusEl.querySelector('[data-time]').textContent = run ? focusLabel() : '';
+    focusEl.querySelector('[data-sub]').textContent = !run
+      ? 'How long do you want to give it?'
+      : over ? 'Past ' + S.focus.mins + ' minutes. Finish whenever you’re ready.'
+      : left === null ? 'Counting up. Tick it off when it’s done.'
+      : 'Stay with it.';
+    focusEl.querySelector('[data-act="stop"]').hidden = !run;
+    focusEl.querySelector('[data-mins]').hidden = run;
+
+    /* Once, on the way past the number you picked. Not a interruption that
+       has to be dismissed — the task is not finished, the clock just went
+       by, and the state is saved so a reload does not ring it again. */
+    if (run && over && !S.focus.rang) {
+      S.focus.rang = true;
+      save();
+      tick(24, 'time');
+      toast('Time’s up on “' + t.t + '”');
+    }
+  }
+
+  function startFocus(id, mins) {
+    var t = lib(id);
+    if (!t) return;
+    var moved = S.focus && S.focus.id !== id ? lib(S.focus.id) : null;
+    t.mins = mins;                       // offered again next time
+    S.focus = { id: id, at: Date.now(), mins: mins, rang: false };
+    save();
+    tick(10, 'step');
+    paintFocus();
+    startClock();
+    if (tab === 'today') renderToday();
+    if (moved) toast('Timer moved off “' + moved.t + '”');
+  }
+
+  function stopFocus(id) {
+    if (S.focus && S.focus.id === id) S.focus = null;
+    save();
+    stopClock();
+    tick(8, 'undo');
+    paintFocus();
+    if (tab === 'today') renderToday();
+  }
+
+  /* Finishing from in here goes through the same commitFinish as the
+     checkbox on the row, then holds the finishing pose for a beat at the
+     one size in the app where it is actually worth seeing before dropping
+     back to the list. */
+  function doneFromFocus(id) {
+    var t = lib(id);
+    if (!t) return;
+    var evolved = commitFinish(id);
+    stopClock();
+    tick(12, 'done');
+    focusEl.dataset.run = '0';
+    focusEl.dataset.cheer = '1';
+    var img = focusEl.querySelector('.focus-char');
+    if (img) img.src = charSrc('cheer');
+    focusEl.querySelector('[data-time]').textContent = '';
+    focusEl.querySelector('[data-sub]').textContent = 'Done.';
+    focusEl.querySelector('[data-mins]').hidden = true;
+    focusEl.querySelector('[data-act="stop"]').hidden = true;
+    setTimeout(function () {
+      closeFocus();
+      if (tab === 'today') renderToday();
+      toast('Finished “' + t.t + '”' + (evolved ? ' — your companion grew!' : ''),
+        function () { undoTask(id); });
+    }, reduce ? 0 : 900);
+  }
+
+  function closeFocus(now) {
+    if (!focusEl) return;
+    var e = focusEl;
+    focusEl = null;
+    if (now || reduce) { e.remove(); return; }
+    e.classList.add('out');
+    setTimeout(function () { e.remove(); }, 200);
   }
 
   /* ═══════════════════════════════════════════════════════
@@ -759,11 +1253,13 @@
     var daily = live.filter(repeats).sort(byTopic);
     var rest = live.filter(function (t) { return !repeats(t); }).sort(byTopic);
     var newTop = S.topics[0].id;
+    var freq = frequentSuggestions();
 
     main.innerHTML =
       '<div style="padding-top:6px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">' +
         '<div><h2 style="font-size:1.5rem">Your tasks</h2>' +
         '<p class="tiny" style="margin-top:3px">Everything you might do. Nothing here is a promise.</p></div>' +
+        charBadge('work') +
         '<button class="iconbtn" id="topicsBtn" type="button" aria-label="Manage topics" ' +
           'style="flex:none;margin-top:4px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
           'stroke-width="1.9" stroke-linecap="round"><circle cx="8" cy="8" r="3.4"/>' +
@@ -771,11 +1267,24 @@
       '</div>' +
       '<div style="display:flex;gap:8px;margin-top:14px">' +
         '<input class="input" id="newTask" placeholder="Add a task…" maxlength="70" ' +
-          'autocomplete="off" enterkeyhint="done">' +
+          /* Not "done" — on iOS that key tells the system itself to close the
+             keyboard, underneath whatever the keydown handler below does, so
+             preventDefault() on the JS event never sees it. It reads as the
+             keyboard randomly vanishing after some adds and not others,
+             because whether the OS honours a script's handler at all is not
+             consistent. "enter" carries no such instruction; the row still
+             goes in on Enter, the keyboard just has no reason to leave. */
+          'autocomplete="off" enterkeyhint="enter">' +
         '<button class="btn primary" id="newGo" type="button" style="width:48px;flex:none;padding:0" ' +
           'aria-label="Add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
           'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">' +
           '<path d="M12 5.5v13M5.5 12h13"/></svg></button></div>' +
+      (freq.length ? '<span class="picklabel">You’ve added this a few times</span>' +
+        '<div class="pickrow" id="freqRow">' + freq.map(function (x, i) {
+          var c = topColor(x.top);
+          return '<button class="pick" type="button" data-freq="' + i + '" style="--topic:' + c +
+            '"><i style="background:' + c + '"></i>' + esc(x.t) + '</button>'; }).join('') +
+        '</div>' : '') +
       '<span class="picklabel">File the new one under</span>' +
       '<div class="pickrow" id="newTop">' +
         S.topics.map(function (t, i) {
@@ -806,7 +1315,8 @@
         held.map(libRow).join('') + '</ul>' +
         '<p class="tiny" style="margin-top:7px">These keep their repeat and stay ' +
         'out of your days until you unpause them.</p>' : '') +
-      (!items.length ? '<div class="empty"><h3>Nothing here yet</h3>' +
+      (!items.length ? '<div class="empty">' + charBadge('idle', true) +
+        '<h3>Nothing here yet</h3>' +
         '<p class="small">Add a task above and it will be waiting tomorrow morning.</p></div>' : '') +
       '<p class="note" style="margin-top:18px">Tap any task to set when it repeats — ' +
       '<b>every day</b>, <b>certain days</b> (just Tuesdays, say), or <b>once a month</b>. ' +
@@ -854,12 +1364,49 @@
     }
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
     document.getElementById('newGo').addEventListener('click', add);
+    document.querySelectorAll('#freqRow .pick').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var x = freq[Number(b.dataset.freq)]; if (!x) return;
+        var already = S.library.some(function (t) { return t.t.trim().toLowerCase() === x.t.toLowerCase(); });
+        if (!already) {
+          S.library.unshift({ id: nid(), t: x.t, top: x.top, rep: { k: 'none' } });
+          save(); tick(10, 'add');
+        }
+        renderTasks();
+      });
+    });
     document.getElementById('topicsBtn').addEventListener('click', openTopics);
     document.querySelectorAll('#filters .pick').forEach(function (b) {
       b.addEventListener('click', function () { filterTop = b.dataset.f; renderTasks(); }); });
 
     main.querySelectorAll('.row[data-id]').forEach(wireLibRow);
     if (keepY) main.scrollTop = keepY;
+    updateFab();
+  }
+
+  /* ── Quick re-add, pulled not pushed ─────────────────────
+     Nothing here is suggested to you unfiltered — it only ever surfaces a
+     one-off you have typed out and finished more than once before, and only
+     while your list doesn't already have it. It sits by the input as a
+     shortcut for retyping something you clearly ask for again and again,
+     not as the app telling you what to do — it says nothing unless you are
+     already here adding something, and doing nothing about it costs you
+     exactly nothing. */
+  function frequentSuggestions() {
+    var haveNow = {};
+    S.library.forEach(function (t) { haveNow[t.t.trim().toLowerCase()] = 1; });
+    var counts = {}, sample = {};
+    S.history.forEach(function (h) {
+      var key = (h.t || '').trim().toLowerCase();
+      if (!key || haveNow[key]) return;
+      counts[key] = (counts[key] || 0) + 1;
+      sample[key] = { t: h.t, top: h.top };
+    });
+    return Object.keys(counts)
+      .filter(function (k) { return counts[k] >= 2; })
+      .sort(function (a, b) { return counts[b] - counts[a]; })
+      .slice(0, 6)
+      .map(function (k) { return sample[k]; });
   }
 
   /* Pulled out of renderTasks so a row added while you are typing can be
@@ -900,6 +1447,107 @@
       '<button class="mini" data-act="del" type="button" aria-label="Delete ' + esc(t.t) + '">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
         'stroke-linecap="round"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></li>';
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     HISTORY
+
+     The record, not a peephole onto it. The profile sheet used to carry a
+     capped, newest-60 slice of this — enough to feel like it existed, not
+     enough to actually be it, and it lived one tap away from the settings
+     you came there to change. A real tab, and everything you have ever
+     finished, grouped by the day it happened. Days come in a page at a
+     time rather than all at once, since a year of use here can be
+     thousands of rows and a browser rendering all of them at once is
+     exactly the kind of lag the rest of this app has spent effort
+     avoiding. ═══════════════════════════════════════════════════════ */
+  /* A list of days, not a wall of everything at once. Every day is a
+     button showing only a count and a hint of what colours were on it;
+     nothing is expanded until you choose to look at it, so scrolling this
+     tab is never itself a review of everything you didn't do. The point is
+     a place to check in on a day, not a table that keeps score. */
+  var histShown = 20;   // day-buttons revealed so far
+  function renderHistory() {
+    var keepY = main.scrollTop;
+    var byDay = {};
+    S.history.forEach(function (h) { (byDay[h.day] = byDay[h.day] || []).push(h); });
+    var days = Object.keys(byDay).sort().reverse();
+
+    if (!days.length) {
+      main.innerHTML =
+        '<div class="headrow" style="padding-top:6px">' +
+          '<div><h2 style="font-size:1.5rem">History</h2>' +
+          '<p class="tiny" style="margin-top:3px">Everything you finish ends up here. ' +
+          'Pick a day to see what was on it.</p></div>' + charBadge('cheer') + '</div>' +
+        '<div class="empty" style="padding-top:22px">' + charBadge('study', true) +
+        '<h3>Nothing finished yet</h3>' +
+        '<p class="small">Tick something off on Today and it will show up here.</p></div>';
+      updateFab();
+      return;
+    }
+
+    var shown = days.slice(0, histShown), rest = days.length - shown.length;
+    var body = shown.map(function (d) {
+      var items = byDay[d];
+      var dots = items.slice(0, 6).map(function (h) {
+        return '<span class="dot" style="--topic:' + topColor(h.top) + '"></span>';
+      }).join('');
+      return '<button class="dayrow" type="button" data-day="' + d + '">' +
+        '<span class="daylabel">' + esc(dayLabel(d)) + '</span>' +
+        '<span class="daydots">' + dots + '</span>' +
+        '<span class="tiny">' + items.length + (items.length === 1 ? ' thing' : ' things') + '</span>' +
+        '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>';
+    }).join('');
+
+    main.innerHTML =
+      '<div class="headrow" style="padding-top:6px">' +
+        '<div><h2 style="font-size:1.5rem">History</h2>' +
+        '<p class="tiny" style="margin-top:3px">' + S.history.length + ' finished in all, over ' +
+        days.length + (days.length === 1 ? ' day' : ' days') + '.</p></div>' +
+        charBadge('cheer') + '</div>' +
+      '<div class="daylist">' + body + '</div>' +
+      (rest > 0 ? '<button class="btn quiet" id="histMore" type="button" style="margin-top:8px">' +
+        'Show ' + Math.min(rest, 20) + ' earlier day' + (Math.min(rest, 20) === 1 ? '' : 's') +
+        '</button>' : '');
+
+    main.querySelectorAll('.dayrow').forEach(function (b) {
+      b.addEventListener('click', function () { openDay(b.dataset.day, byDay[b.dataset.day]); });
+    });
+    var more = document.getElementById('histMore');
+    if (more) more.addEventListener('click', function () { histShown += 20; renderHistory(); });
+
+    if (keepY) main.scrollTop = keepY;
+    updateFab();
+  }
+
+  /* What a single day looked like, opened on demand. Lighter than a task
+     row on purpose: these are not things left to act on, and drawing them
+     like the ones you can would make the list read as work still to do. */
+  function openDay(day, items) {
+    var isToday = day === todayKey();
+    var sorted = items.slice().sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
+    var rows = sorted.map(function (h) {
+      return '<div class="archrow">' +
+        '<span class="dot" style="--topic:' + topColor(h.top) + '"></span>' +
+        '<span class="archname">' + esc(h.t) + '</span>' +
+        '<span class="tiny">' + esc(topic(h.top).n) + '</span>' +
+        (isToday ? '<button class="mini" data-undo="' + h.taskId + '" type="button" ' +
+          'aria-label="Put back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+          'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M20 12a8 8 0 10-2.5 5.8"/><path d="M20 6.5V12h-5.5"/></svg></button>' : '') +
+        '</div>';
+    }).join('');
+    sheet(dayLabel(day), '<div class="archive">' + rows + '</div>', function (sh, close) {
+      sh.querySelectorAll('[data-undo]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          undoTask(Number(b.dataset.undo));
+          tick(8, 'undo');
+          close();
+          renderHistory();
+        });
+      });
+    });
   }
 
   /* ═══════════════════════════════════════════════════════
@@ -1039,8 +1687,7 @@
               (draft.rep.k === k[0]) + '">' + k[1] + '</button>'; }).join('') + '</div></div>' +
       '<div id="eDetail"></div>' +
       '<p class="tiny" id="eSummary"></p>' +
-      '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:10px;' +
-        'display:flex;flex-direction:column;gap:6px">' +
+      '<div class="sheet-foot">' +
         '<button class="btn primary" id="eSave" type="button">Save</button>' +
         (isNew ? '' :
           /* Pausing is the answer to "I am not doing this for a while but I
@@ -1185,7 +1832,7 @@
           }).join('') + '</div>'
         : '<div class="empty"><h3>Everything is already on today</h3>' +
           '<p class="small">Add more in the Tasks tab.</p></div>') +
-      '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:10px">' +
+      '<div class="sheet-foot">' +
         '<button class="btn primary" id="go" type="button" disabled>Add to today</button></div>',
       function (sh, close) {
         var go = sh.querySelector('#go');
@@ -1203,7 +1850,7 @@
         go.addEventListener('click', function () {
           Object.keys(chosen).forEach(function (k) { if (chosen[k]) onDay(Number(k)); });
           S.day.planned = true; save(); close(); tick(12);
-          setTimeout(renderToday, 60);
+          setTimeout(function () { if (tab === 'today') renderToday(); }, 60);
         });
       });
   }
@@ -1535,6 +2182,80 @@
     openProfile();
   }
 
+  /* ── Companion sheet ──────────────────────────────────────
+     A name and a colour are cheap to build and do more for "this is mine"
+     than another drawn-on accessory would. Nothing here touches the stage
+     system above — that stays the one thing that only ever moves forward. */
+  function openPet() {
+    function body() {
+      var stage = petStage(), n = S.history.length, next = PET_STAGES[stage];
+      return '<div style="display:grid;place-items:center;gap:10px;padding:4px 0 6px">' +
+          '<span class="pet pet-big" id="petBig"' +
+            (petHue() ? ' style="--pet-hue:' + esc(petHue()) + '"' : '') + '>' +
+            charTag() + '</span>' +
+          '<p class="small" style="text-align:center;max-width:270px">' +
+            esc(petLine(stage)) + '</p>' +
+        '</div>' +
+        '<p class="tiny" style="text-align:center">' + (next
+          ? (next - n) + ' more finished tasks, all time, to the next stage'
+          : 'As far as the stages go — it keeps you company either way') + '</p>' +
+        '<hr class="rule" style="margin:16px 0">' +
+        '<div class="field"><label>Name</label>' +
+          '<input class="input" id="petNameIn" maxlength="24" placeholder="Give them a name" ' +
+            'value="' + esc(S.petName || '') + '"></div>' +
+        '<div class="field"><label>Body</label>' +
+          '<div class="pickrow" id="petSexRow">' +
+            [['m', 'Boy'], ['f', 'Girl']].map(function (o) {
+              var has = !!(CHAR_ART[o[0]] || {}).idle;
+              return '<button class="pick" type="button" data-sex="' + o[0] + '"' +
+                (has ? '' : ' disabled') + ' aria-pressed="' + (charSex() === o[0]) +
+                '">' + o[1] + (has ? '' : ' · soon') + '</button>'; }).join('') +
+          '</div></div>' +
+        /* The outfit is painted into the artwork, so this cannot repaint it.
+           What it does tint is the light he stands in, which is honest about
+           itself and still makes the corner feel chosen. */
+        '<div class="field"><label>Glow</label><div class="swatches" id="petSwatches">' +
+          SWATCHES.map(function (s) {
+            return '<button class="sw" type="button" data-petsw="' + s.id + '" aria-pressed="' +
+              (S.petColor === s.id) + '" style="background:' + (isDark() ? s.d : s.l) +
+              '" aria-label="' + s.id + '"></button>'; }).join('') +
+        '</div><p class="tiny">Tints the light around them. Their clothes come with ' +
+        'the artwork.</p></div>';
+    }
+
+    sheet(S.petName ? esc(S.petName) : 'Your companion', body(), function (sh) {
+      var petBtn = document.getElementById('pet');
+      sh.querySelector('#petNameIn').addEventListener('input', function (e) {
+        S.petName = e.target.value.slice(0, 24); save();
+        var h2 = sh.querySelector('.sheet-head h2');
+        if (h2) h2.textContent = S.petName || 'Your companion';
+        if (petBtn) petBtn.setAttribute('aria-label', 'Customize ' + (S.petName || 'your companion'));
+      });
+      sh.querySelectorAll('[data-sex]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (!(CHAR_ART[b.dataset.sex] || {}).idle) return;   // art not in yet
+          S.petSex = b.dataset.sex; save();
+          sh.querySelectorAll('[data-sex]').forEach(function (x) {
+            x.setAttribute('aria-pressed', String(x.dataset.sex === charSex())); });
+          var big = sh.querySelector('#petBig');
+          if (big) big.innerHTML = charTag();
+          if (petBtn) petBtn.innerHTML = charTag();
+        });
+      });
+      sh.querySelectorAll('[data-petsw]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          S.petColor = b.dataset.petsw; save();
+          sh.querySelectorAll('[data-petsw]').forEach(function (x) {
+            x.setAttribute('aria-pressed', String(x.dataset.petsw === S.petColor)); });
+          var hue = petHue();
+          var big = sh.querySelector('#petBig');
+          if (big) big.style.setProperty('--pet-hue', hue);
+          if (petBtn) petBtn.style.setProperty('--pet-hue', hue);
+        });
+      });
+    });
+  }
+
   function openProfile() {
     var byDay = {}, byTop = {};
     S.history.forEach(function (h) {
@@ -1566,23 +2287,7 @@
           topColor(id) + '"></i></div></div>'; }).join('');
 
     var todayDone = S.history.filter(function (h) { return h.day === k; });
-
-    // Newest first, capped — the whole history can be thousands of rows and
-    // this is a panel, not an export.
-    var past = S.history.filter(function (h) { return h.day !== k; })
-      .sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
-    var earlier = past.slice(0, 60), older = past.length - earlier.length;
-    var lastDay = null, earlierHtml = '';
-    earlier.forEach(function (h) {
-      if (h.day !== lastDay) {
-        lastDay = h.day;
-        earlierHtml += '<div class="archday">' + esc(dayLabel(h.day)) + '</div>';
-      }
-      earlierHtml += '<div class="archrow">' +
-        '<span class="dot" style="--topic:' + topColor(h.top) + '"></span>' +
-        '<span class="archname">' + esc(h.t) + '</span>' +
-        '<span class="tiny">' + esc(topic(h.top).n) + '</span></div>';
-    });
+    var beforeToday = S.history.length - todayDone.length;
 
     sheet('You',
       '<div style="display:flex;align-items:center;gap:13px">' +
@@ -1626,17 +2331,11 @@
             '<path d="M20 6.5V12h-5.5"/></svg></button></li>'; }).join('') + '</ul>' +
         '<p class="tiny">Tapped one by mistake? Put it back.</p>' : '') +
 
-      /* Everything finished before today, newest first. Tasks that repeat
-         come back by themselves and one-offs disappear from the list once
-         they are done, so without this there was nowhere left to see that
-         any of it had happened — and for a great many people that record is
-         the entire point of ticking something off. */
-      (earlier.length ? '<div class="groupline"><span class="label">Finished before today</span>' +
-        '<span class="tiny">' + earlier.length + '</span></div>' +
-        '<div class="archive">' + earlierHtml + '</div>' +
-        (older > 0 ? '<p class="tiny">' + older +
-          ' older ' + (older === 1 ? 'one is' : 'ones are') +
-          ' kept too, and counted in your stats.</p>' : '') : '') +
+      /* The itemised record itself now lives in its own tab rather than a
+         capped slice in here — this is a stats panel, not the archive. */
+      (beforeToday > 0 ? '<div class="groupline"><span class="label">Before today</span></div>' +
+        '<button class="link" id="goHistory" type="button" style="text-align:left;padding:2px">' +
+          beforeToday + ' more finished before today — see your full History</button>' : '') +
 
       '<div id="wallCard">' + wallHtml() + '</div>' +
 
@@ -1648,6 +2347,20 @@
           return '<button class="pick" type="button" data-h="' + h + '" aria-pressed="' +
             (h === S.dayStart) + '">' + h + 'am</button>'; }).join('') + '</div>' +
         '<p class="tiny" id="hourNote"></p></div>' +
+      '<div class="field"><label>Text</label>' +
+        '<div class="pickrow" id="fonts">' +
+          '<button class="pick" type="button" data-font="" aria-pressed="' + (!S.font) +
+            '" style="font-family:\'Nunito\',sans-serif">Nunito</button>' +
+          '<button class="pick" type="button" data-font="dyslexic" aria-pressed="' +
+            (S.font === 'dyslexic') + '" style="font-family:\'OpenDyslexic\',sans-serif">' +
+            'OpenDyslexic</button>' +
+          '<button class="pick" type="button" data-font="legible" aria-pressed="' +
+            (S.font === 'legible') + '" style="font-family:\'Atkinson Hyperlegible\',sans-serif">' +
+            'Atkinson</button>' +
+        '</div>' +
+        '<p class="tiny">Two options built for easier reading — Atkinson keeps ' +
+        'letters like b/d/p/q apart, OpenDyslexic is the well-known dyslexia ' +
+        'typeface. Try both; which one helps is personal.</p></div>' +
       '<div class="switchrow"><span style="font-size:.9rem">Dark theme</span>' +
         '<button class="switch" id="themeSw" role="switch" aria-checked="' + isDark() +
         '"><span></span></button></div>' +
@@ -1693,6 +2406,8 @@
             setTimeout(function () { toast('Put back on today'); }, 260);
           });
         });
+        var goHist = sh.querySelector('#goHistory');
+        if (goHist) goHist.addEventListener('click', function () { close(); goTab('history'); });
 
         wireAccount(sh);
         wireWall(sh);
@@ -1709,6 +2424,15 @@
             sh.querySelectorAll('#hours .pick').forEach(function (x) {
               x.setAttribute('aria-pressed', String(Number(x.dataset.h) === S.dayStart)); });
             note();
+          });
+        });
+        sh.querySelectorAll('#fonts .pick').forEach(function (b) {
+          b.addEventListener('click', function () {
+            S.font = b.dataset.font; save();
+            if (S.font) document.documentElement.setAttribute('data-font', S.font);
+            else document.documentElement.removeAttribute('data-font');
+            sh.querySelectorAll('#fonts .pick').forEach(function (x) {
+              x.setAttribute('aria-pressed', String(x.dataset.font === S.font)); });
           });
         });
         sh.querySelector('#themeSw').addEventListener('click', function () {
@@ -1728,6 +2452,7 @@
           if (!confirm('Clear all tasks, topics, history and settings?')) return;
           localStorage.removeItem(KEY); S = fresh(); ensureDay(); save();
           document.documentElement.removeAttribute('data-theme');
+          document.documentElement.removeAttribute('data-font');
           close(); render(); topAvatar(); paintWall();
           // Starting over should feel like a first run, because it is one.
           seenIntro = false;
@@ -1870,15 +2595,14 @@
       return '<p class="tiny">' + c.note + '</p>' +
         '<div style="display:flex;gap:8px;margin-top:14px">' +
           '<input class="input" id="wIn" placeholder="' + c.ph + '" maxlength="70" ' +
-            'autocomplete="off" enterkeyhint="done">' +
+            'autocomplete="off" enterkeyhint="enter">' +
           '<button class="btn primary" id="wAdd" type="button" style="width:48px;flex:none;padding:0" ' +
             'aria-label="Add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
             'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">' +
             '<path d="M12 5.5v13M5.5 12h13"/></svg></button></div>' +
         '<div id="wIdeas">' + ideaHtml(kind) + '</div>' +
         '<div id="wList">' + listHtml(kind) + '</div>' +
-        '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:14px;' +
-          'margin-top:18px">' +
+        '<div class="sheet-foot" style="margin-top:14px">' +
           '<button class="btn primary" id="wNext" type="button">' + c.next + '</button>' +
           '<button class="link" id="wSkipStep" type="button">' + c.skip + '</button></div>';
     }
@@ -1982,7 +2706,7 @@
       '<p class="tiny" id="capNote">Pick one and I will only suggest as much as that.</p>' +
       '<div class="groupline"><span class="label">What do you want to finish?</span></div>' +
       '<div style="display:flex;flex-direction:column;gap:7px" id="mList"></div>' +
-      '<div style="position:sticky;bottom:0;background:var(--ground);padding-top:10px">' +
+      '<div class="sheet-foot">' +
         '<button class="btn primary" id="go" type="button">Start my day</button>' +
         '<button class="link" id="skip" type="button">Skip — just show me today</button></div>',
       function (sh, close) {
@@ -2025,7 +2749,7 @@
           Object.keys(chosen).forEach(function (x) {
             if (chosen[x]) onDay(Number(x)); });
           S.day.planned = true; save(); close();
-          setTimeout(renderToday, 60);
+          setTimeout(function () { if (tab === 'today') renderToday(); }, 60);
         }
         go.addEventListener('click', function () { tick(12, 'step'); done(); });
         sh.querySelector('#skip').addEventListener('click', function () { chosen = {}; done(); });
@@ -2060,7 +2784,9 @@
       try { fs = act.selectionStart; fe = act.selectionEnd; } catch (e) {}
     }
 
-    if (tab === 'today') renderToday(); else renderTasks();
+    if (tab === 'today') renderToday();
+    else if (tab === 'history') renderHistory();
+    else renderTasks();
     paintWall();
 
     if (fid) {
@@ -2146,6 +2872,7 @@
 
   document.querySelectorAll('.tabbtn').forEach(function (b) {
     b.addEventListener('click', function () { goTab(b.dataset.tab); }); });
+  document.getElementById('fab').addEventListener('click', function () { tick(8, 'tap'); openPicker(); });
   document.getElementById('profileBtn').addEventListener('click', openProfile);
   document.getElementById('themeBtn').addEventListener('click', function () {
     var next = isDark() ? 'light' : 'dark';
@@ -2166,6 +2893,7 @@
         if (!S.topDel) S.topDel = [];
         try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
         if (S.theme) document.documentElement.setAttribute('data-theme', S.theme);
+        if (S.font) document.documentElement.setAttribute('data-font', S.font);
         ensureDay();
         topAvatar();
         renderWhenFree();
@@ -2190,6 +2918,9 @@
   render();
   paintWall();
   acctBanner();
+  // A timer that was running when the app was closed is still running — it
+  // was only ever a start time and a length. Pick the second hand back up.
+  startClock();
   // A first run gets the welcome; every run after that gets the morning
   // question. They never both appear, and neither ever blocks the app.
   setTimeout(S.onboarded ? morning : welcome, S.onboarded ? 400 : 320);

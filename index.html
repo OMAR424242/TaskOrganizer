@@ -54,11 +54,17 @@
 
   <main id="main"></main>
 
+  <button class="fab hidden" id="fab" type="button" aria-label="Add to today">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5.5v13M5.5 12h13"/></svg>
+  </button>
+
   <nav class="tabbar">
     <button class="tabbtn" data-tab="today" aria-selected="true" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.7V12l3 1.9"/></svg>Today</button>
     <button class="tabbtn" data-tab="tasks" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6.5h11M9.5 12h11M9.5 17.5h11"/><path d="M3.5 6.3l1.3 1.3L7.2 5M3.5 11.8l1.3 1.3L7.2 10.5M3.5 17.3l1.3 1.3L7.2 16"/></svg>Tasks</button>
+    <button class="tabbtn" data-tab="history" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7.5v5l3.5 2"/><path d="M4.5 9A7.5 7.5 0 1112 19.5"/><path d="M3.2 5.5L4.4 9l3.6-1"/></svg>History</button>
   </nav>
 </div>
 

@@ -66,3 +66,19 @@ drop trigger if exists on_auth_user_created_app_state on auth.users;
 create trigger on_auth_user_created_app_state
   after insert on auth.users
   for each row execute function public.app_state_seed();
+
+-- Lets a signed-in device hear about another device's change the moment it
+-- lands, instead of waiting out the poll in sync.js. Row Level Security
+-- still applies — a client only ever receives change notifications for
+-- rows it could have read anyway. Guarded because, unlike the statements
+-- above, "alter publication ... add table" errors on a second run rather
+-- than quietly doing nothing.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'app_state'
+  ) then
+    alter publication supabase_realtime add table public.app_state;
+  end if;
+end $$;

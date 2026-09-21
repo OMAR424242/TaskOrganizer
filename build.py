@@ -28,13 +28,21 @@ def read(name):
 def main():
     html = read('index.html')
 
-    # The stylesheet link becomes the stylesheet, with the font folded into it.
+    # The stylesheet link becomes the stylesheet, with every self-hosted font
+    # folded into it as base64 — Nunito plus the two optional text-picker
+    # faces, each shipped as a plain (non-variable) regular+bold pair.
     css = read('styles.css')
-    with open(os.path.join(HERE, 'fonts', 'nunito-variable.woff2'), 'rb') as f:
-        woff = base64.b64encode(f.read()).decode('ascii')
-    src = "url('./fonts/nunito-variable.woff2') format('woff2')"
-    assert css.count(src) == 1, 'font src not found exactly once'
-    css = css.replace(src, "url(data:font/woff2;base64,%s) format('woff2')" % woff)
+    FONT_FILES = [
+        'nunito-variable.woff2',
+        'OpenDyslexic-Regular.woff2', 'OpenDyslexic-Bold.woff2',
+        'AtkinsonHyperlegible-Regular.woff2', 'AtkinsonHyperlegible-Bold.woff2',
+    ]
+    for fname in FONT_FILES:
+        with open(os.path.join(HERE, 'fonts', fname), 'rb') as f:
+            woff = base64.b64encode(f.read()).decode('ascii')
+        src = "url('./fonts/%s') format('woff2')" % fname
+        assert css.count(src) == 1, 'font src not found exactly once: %s' % fname
+        css = css.replace(src, "url(data:font/woff2;base64,%s) format('woff2')" % woff)
     html = html.replace(
         '<link rel="preload" href="./fonts/nunito-variable.woff2" as="font" '
         'type="font/woff2" crossorigin>', '')
@@ -46,10 +54,29 @@ def main():
     # Each script tag becomes its contents. </script> inside a string would
     # close the tag early, so it is split — this is the one transformation
     # that is not a plain copy.
+    # The companion's artwork is referenced from app.js by relative path.
+    # A single file has no folder sitting next to it, so each picture is
+    # folded in as a data URI the same way the fonts are — and the assert
+    # means a renamed or moved file fails the build instead of shipping a
+    # page with a broken character on it.
+    art_dir = os.path.join(HERE, 'art')
+    art_subs = []
+    for fname in sorted(os.listdir(art_dir)) if os.path.isdir(art_dir) else []:
+        if not fname.endswith('.webp'):
+            continue
+        with open(os.path.join(art_dir, fname), 'rb') as f:
+            b64 = base64.b64encode(f.read()).decode('ascii')
+        art_subs.append(("'./art/%s'" % fname,
+                         "'data:image/webp;base64,%s'" % b64))
+
     for name in ('config.js', 'sync.js', 'app.js'):
         tag = '<script src="./%s"></script>' % name
         assert html.count(tag) == 1, '%s script tag not found exactly once' % name
         js = read(name).replace('</script>', "<\\/script>")
+        if name == 'app.js':
+            for ref, uri in art_subs:
+                assert js.count(ref) == 1, 'art ref not found exactly once: %s' % ref
+                js = js.replace(ref, uri)
         html = html.replace(tag, '<script>\n' + js + '\n</script>')
 
     # An artifact has no service worker, no manifest and no icon files next to
@@ -85,6 +112,12 @@ def main():
     leftover = re.findall(r'<(?:script|link)[^>]*(?:src|href)="\./[^"]*"', html)
     if leftover:
         print('STILL EXTERNAL: %r' % leftover)
+        return 1
+
+    # Those tags are not the only way out: the character art is named from
+    # inside a script, where the check above cannot see it.
+    if './art/' in html:
+        print('STILL EXTERNAL: a ./art/ path survived into the built page')
         return 1
 
     print('wrote %s  (%d KB)' % (OUT, len(html.encode('utf-8')) // 1024))
