@@ -115,6 +115,9 @@
      phone. Nothing here was wrong, exactly — it was just all a frame or
      two longer than it needed to be, and that adds up over a day. */
   --t1:55ms; --t2:95ms; --t3:145ms; --t4:200ms; --t5:290ms;
+  /* Long enough that one drawing is clearly becoming another, short enough
+     that it never delays the tick it belongs to. */
+  --t-pose:300ms;
   --e-out:cubic-bezier(0,0,.38,.9);
   --e-in:cubic-bezier(.3,0,1,.9);
   --e-std:cubic-bezier(.2,0,0,1);
@@ -177,7 +180,7 @@
   --sh-3:0 12px 36px rgba(0,0,0,.55);
 }
 @media (prefers-reduced-motion:reduce){
-  :root{--t1:.01ms;--t2:.01ms;--t3:.01ms;--t4:.01ms;--t5:.01ms}
+  :root{--t1:.01ms;--t2:.01ms;--t3:.01ms;--t4:.01ms;--t5:.01ms;--t-pose:.01ms}
 }
 
 *{box-sizing:border-box}
@@ -254,8 +257,17 @@ h1,h2,h3{font-weight:800;letter-spacing:-.01em;line-height:1.15;margin:0;text-wr
 .wall{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 .wall::before{content:'';position:absolute;inset:0;
   background-image:var(--wall-img,none);background-size:cover;background-position:center}
+/* The veil, and the app's own paper grain on top of it. The grain matters:
+   the wallpaper layer sits above the one the rest of the app is textured by,
+   so without this a wallpapered Today is the one screen in the app made of
+   smooth glass while every other surface is paper. The opacity is folded
+   into the colour rather than set on the element, because `opacity` would
+   take the grain down with it and the slider is allowed to go to almost
+   nothing. */
 .wall::after{content:'';position:absolute;inset:0;
-  background:var(--ground);opacity:var(--wall-dim,.58)}
+  background-color:color-mix(in oklab,var(--ground)
+    calc(var(--wall-dim,.58) * 100%),transparent);
+  background-image:var(--grain);background-repeat:repeat}
 .app.walled{background:transparent}
 /* These used to be backdrop-filter blurs. On iOS a blur is composited on
    every frame of every scroll, which is most of what made the app feel
@@ -451,19 +463,39 @@ main::-webkit-scrollbar{width:0}
    ever end up on top of the art the way an absolutely-positioned layer
    inside a button can. */
 .pet{flex:none;display:grid;place-items:end center;padding:0 12px 5px;
-  background:
-    radial-gradient(38% 7% at 50% 96%,
-      color-mix(in oklab,var(--depth) 88%,transparent) 0%,transparent 72%),
-    /* No halo until a colour is actually chosen — the fallback mixes
-       transparent with transparent, which is nothing at all. */
-    radial-gradient(52% 42% at 50% 58%,
-      color-mix(in oklab,var(--pet-hue,transparent) 30%,transparent) 0%,transparent 74%)}
+  background:radial-gradient(38% 7% at 50% 96%,
+    color-mix(in oklab,var(--depth) 88%,transparent) 0%,transparent 72%)}
 /* It is a real button — tap it to name and dress him — but it should read
    as the character standing there, not as a control. */
 #pet{border:none;transition:transform var(--t1) var(--e-out)}
 #pet:active{transform:scale(.94)}
+/* Two drawings share this cell for the length of a dissolve. Without this
+   the second one opens a second grid row and he briefly stands on his own
+   head. */
+.pet>.char{grid-area:1/1}
+/* Standing still and being a sticker are different things. Three pixels over
+   four and a half seconds — slower than real breathing, small enough that you
+   only catch it when you look straight at him. It rides on transform because
+   translate and scale are held for the pose dissolve. */
+@keyframes charBreath{
+  0%,100%{transform:translateY(0)}
+  50%    {transform:translateY(-3px)}}
+.pet>.char{animation:charBreath 4.6s ease-in-out infinite}
 .char{display:block;height:var(--char-h,106px);width:auto;
-  filter:drop-shadow(0 7px 8px color-mix(in oklab,var(--depth) 78%,transparent))}
+  filter:drop-shadow(0 7px 8px color-mix(in oklab,var(--depth) 78%,transparent));
+  /* Changing pose is a dissolve, not a cut. translate and scale are their own
+     properties here rather than parts of a transform, because transform is
+     already spoken for by whichever motion keyframes are running underneath —
+     the individual ones compose with it instead of fighting it. */
+  transition:opacity var(--t-pose) var(--e-out),
+             translate var(--t-pose) var(--e-out),
+             scale var(--t-pose) var(--e-out)}
+/* Where it starts: a little low, a little small, not quite there yet. */
+.char.pose-in{opacity:0;translate:0 9px;scale:.955}
+/* And the one being replaced, fading where it stands. The animation goes
+   because this is a clone: it would otherwise carry on jogging, or hop the
+   finishing hop a second time, on its way out. */
+.char-ghost{opacity:0;scale:1.03;animation:none!important;pointer-events:none}
 /* He grows with the lifetime total. Same render, more of him — which is the
    whole stage system intact without needing four separate drawings. */
 .pet[data-stage="1"]{--char-h:114px}
@@ -484,6 +516,8 @@ main::-webkit-scrollbar{width:0}
 @media (prefers-reduced-motion:reduce){
   .pet-eye{animation:none}
   .pet.bump,.pet.evolve{animation:none}
+  .pet>.char{animation:none}
+  .char{transition:none}
 }
 
 /* ═══════════ ROWS ═══════════ */
@@ -700,6 +734,17 @@ main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
 .input::placeholder{color:var(--ink-3);font-weight:600}
 .input:focus{outline:none;border-color:var(--blue);background:var(--surface)}
 .pickrow{display:flex;gap:7px;flex-wrap:wrap}
+/* Eight topics wrapped over three rows is a wall of words where a filter
+   should be. On one line that scrolls, it is a strip you flick through and
+   the list underneath stays the thing on the screen. */
+.scrollrow{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch;
+  /* Room for the pressed state to drop into without being clipped, and the
+     same padding given back so the first chip still lines up with the
+     margin. */
+  padding:3px 16px 6px;margin:0 -16px;scroll-padding:0 16px}
+.scrollrow::-webkit-scrollbar{display:none}
+.scrollrow>.pick{flex:none;scroll-snap-align:start}
 /* A choice that exists but has nothing behind it yet — greyed, still
    readable, and saying so rather than silently doing nothing. */
 .pick[disabled]{opacity:.45;cursor:default}
@@ -802,28 +847,45 @@ main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
 /* ═══════════ HISTORY ═══════════
    A list of day-buttons rather than a table of everything — nothing below
    opens until you tap a day. */
-.daylist{display:flex;flex-direction:column;gap:9px}
-.dayrow{display:flex;align-items:center;gap:10px;padding:13px 14px;border-radius:16px;
+.daylist{display:flex;flex-direction:column;gap:10px}
+.dayrow{display:flex;align-items:center;gap:11px;padding:16px 15px;border-radius:17px;
   background:var(--surface);border:2px solid var(--rule);border-bottom-width:4px;
   width:100%;text-align:left;font-family:var(--font);
   transition:border-color var(--t2) var(--e-out),transform var(--t1) var(--e-out)}
 .dayrow:active{transform:translateY(2px);border-bottom-width:2px;margin-bottom:2px}
-.daylabel{font-weight:800;font-size:.95rem;color:var(--ink)}
-.daydots{display:flex;gap:3px;flex:1;min-width:0;overflow:hidden}
-.daydots .dot{width:8px;height:8px;box-shadow:none;flex:none}
+.daylabel{font-weight:800;font-size:1.02rem;color:var(--ink)}
+.daydots{display:flex;gap:3.5px;flex:1;min-width:0;overflow:hidden}
+.daydots .dot{width:9px;height:9px;box-shadow:none;flex:none}
 .dayrow .tiny{flex:none;color:var(--ink-3)}
-.dayrow .chev{width:16px;height:16px;flex:none;color:var(--ink-3)}
+.dayrow .chev{width:17px;height:17px;flex:none;color:var(--ink-3)}
 
-/* The record inside a single day, opened in a sheet. Deliberately lighter
-   than a task row: these are not things you can act on, and drawing them
-   like the ones you can would make the list read as work still to do. */
-.archive{display:flex;flex-direction:column;gap:2px}
-.archrow{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;
-  background:var(--sunken)}
-.archrow .dot{width:9px;height:9px;box-shadow:none}
-.archname{flex:1;min-width:0;font-size:.88rem;font-weight:700;color:var(--ink-2);
+/* The record inside a single day, opened in a sheet. It used to be a tight
+   grey strip on the grounds that these are not things you can act on — which
+   was true right up until this became the place you put one back. A row you
+   are meant to reach into needs to be reachable: full task name on its own
+   line, where it was filed and when it was ticked underneath, and a target
+   big enough to hit without aiming. */
+.archive{display:flex;flex-direction:column;gap:8px}
+.archrow{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:15px;
+  background:var(--sunken);border:1.5px solid transparent}
+.archrow.undoable{border-color:color-mix(in oklab,var(--topic,var(--rule)) 26%,var(--rule));
+  background:var(--surface)}
+.archrow .dot{width:11px;height:11px;box-shadow:none;flex:none}
+.archbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.archname{font-size:1rem;font-weight:800;color:var(--ink);line-height:1.25;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.archrow .tiny{flex:none;font-size:.72rem}
+.archtop{font-size:.75rem;font-weight:700;color:var(--ink-3)}
+/* Named rather than an icon on its own. "Put back" is two words and removes
+   every doubt about what the arrow would have meant. */
+.undo{flex:none;display:inline-flex;align-items:center;gap:6px;
+  padding:9px 13px;border-radius:12px;font-family:var(--font);
+  font-size:.8rem;font-weight:800;color:var(--ink-2);
+  background:var(--ground);border:2px solid var(--rule);border-bottom-width:3px;
+  transition:transform var(--t1) var(--e-out),border-color var(--t2) var(--e-out),
+    color var(--t2) var(--e-out)}
+.undo svg{width:16px;height:16px;flex:none}
+.undo:hover{color:var(--ink);border-color:color-mix(in oklab,var(--ink) 26%,var(--rule))}
+.undo:active{transform:translateY(2px);border-bottom-width:2px;margin-bottom:1px}
 
 /* ═══════════ TOAST ═══════════ */
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:82px;z-index:95;

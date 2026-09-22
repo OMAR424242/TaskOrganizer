@@ -129,6 +129,13 @@
   if (typeof S.petSex !== 'string') S.petSex = 'm';
   if (!S.focus || typeof S.focus !== 'object') S.focus = null;
 
+  /* The six wallpapers were redrawn and renamed. An id that no longer exists
+     produces no wallpaper at all and looks like the setting was lost, so each
+     old one points at whichever new one it most nearly was. */
+  var WALL_WAS = { dawn: 'petal', sea: 'tide', moss: 'orchard',
+                   dusk: 'ember', sand: 'sunrise', ink: 'slate' };
+  if (S.wall && S.wall.k === 'grad' && WALL_WAS[S.wall.g]) S.wall.g = WALL_WAS[S.wall.g];
+
   /* The build before this one seeded eight example tasks. If a device still
      has exactly those, with nothing finished and nothing of its own added,
      then nobody ever really used it — clear them out so the welcome can do
@@ -178,6 +185,28 @@
   });
   if (S.theme) document.documentElement.setAttribute('data-theme', S.theme);
   if (S.font) document.documentElement.setAttribute('data-font', S.font);
+
+  /* ── The bar above the app ─────────────────────────────
+     On a phone the browser paints the status bar from one meta tag, and the
+     markup used to answer it twice — once per OS scheme — which is fine right
+     up until somebody uses the theme switch inside the app and their phone
+     disagrees. Then the app is dark and the strip above it is white.
+
+     Reading --ground back off the document instead means there is one answer
+     and it is, by construction, the colour the app is actually painted in. */
+  function paintThemeColor() {
+    var m = document.getElementById('themeColor');
+    if (!m) return;
+    var c = getComputedStyle(document.documentElement).getPropertyValue('--ground').trim();
+    if (c) m.setAttribute('content', c);
+  }
+  paintThemeColor();
+  // Only matters while the app is following the phone rather than its own
+  // setting, but it costs nothing to keep listening.
+  try {
+    matchMedia('(prefers-color-scheme: dark)')
+      .addEventListener('change', paintThemeColor);
+  } catch (e) {}
 
   /* ── Repeat rules ──────────────────────────────────────
      none  · once, sits in the library until you pick it
@@ -542,6 +571,14 @@
     var d = parseDay(key);
     return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   }
+  /* When, not how long ago. In the reader's own clock format, because 5pm
+     and 17:00 are the same moment to everyone except the person reading it. */
+  function timeOfDay(at) {
+    try {
+      return new Date(at).toLocaleTimeString(undefined,
+        { hour: 'numeric', minute: '2-digit' });
+    } catch (e) { return ''; }
+  }
 
   /* ── A small companion, not a system ────────────────────
      No level bar, no health, nothing that can go down — because it has no
@@ -567,10 +604,6 @@
     'Two-fifty and counting. Still here because you are.'
   ];
   function petLine(stage) { return PET_LINES[stage] || PET_LINES[PET_LINES.length - 1]; }
-  // '' (never customised) renders as the original fixed blue via the CSS
-  // fallback in --pet-hue — this only ever returns a value once someone
-  // has actually chosen a colour.
-  function petHue() { return S.petColor ? swatchColor(S.petColor) : ''; }
   /* The companion is a rendered character now rather than a drawn shape.
      One file per body per pose, and the lifetime stage is carried by how
      tall it is drawn (see --char-h in the stylesheet) instead of by
@@ -624,6 +657,50 @@
   function charTag(pose, cls) {
     return '<img class="char' + (cls ? ' ' + cls : '') + '" src="' +
       charSrc(pose || 'idle') + '" alt="" draggable="false">';
+  }
+
+  /* ── Changing from one drawing to another ──────────────
+     Swapping the src on a single tag is a cut: one frame he is standing,
+     the next his arms are up, with nothing in between. There is no in-between
+     to draw — these are six finished pictures, not a rig — so the transition
+     has to be made rather than animated, and the honest way to make one is to
+     dissolve.
+
+     Both drawings are on the screen for a fifth of a second: the old one
+     fading where it stands, the new one arriving a little low and light and
+     settling onto its feet. That settle is what stops it reading as a
+     cross-dissolve in a slideshow — something lands, and the ground it lands
+     on is the same in both pictures because every pose was cut onto one
+     shared canvas.
+
+     The outgoing copy has its animation killed outright. It is a clone, so it
+     inherits whatever motion rule was running, and a picture that keeps
+     jogging while it disappears is a ghost rather than a goodbye. */
+  var POSE_FADE = 300;
+  function swapChar(host, pose, cls) {
+    if (!host) return null;
+    var old = host.querySelector('.char');
+    var next = el(charTag(pose, cls));
+    if (!old || reduce) {
+      if (old) old.parentNode.removeChild(old);
+      host.appendChild(next);
+      return next;
+    }
+    // Falling back to the same file is not a pose change, and dissolving a
+    // picture into itself only makes it flicker.
+    if (old.getAttribute('src') === next.getAttribute('src')) return old;
+    old.classList.add('char-ghost');
+    next.classList.add('pose-in');
+    /* Straight after the one it replaces rather than at the end, so it keeps
+       the old one's place in the stack. Appended, it would land on top of the
+       effects layer and the finishing sparks would go off behind him. */
+    host.insertBefore(next, old.nextSibling);
+    void next.offsetWidth;            // so removing the class is a transition
+    next.classList.remove('pose-in');
+    setTimeout(function () {
+      if (old.parentNode) old.parentNode.removeChild(old);
+    }, POSE_FADE + 40);
+    return next;
   }
 
   /* ── What the character is doing ───────────────────────
@@ -727,11 +804,10 @@
       if (cheerT) clearTimeout(cheerT);
       cheerT = setTimeout(function () {
         cheerUntil = 0; cheerT = null;
-        var q = document.getElementById('pet');
-        if (q) q.innerHTML = charTag('idle');   // may be long gone; fine
+        swapChar(document.getElementById('pet'), 'idle');   // may be long gone; fine
       }, CHEER_MS);
     }
-    p.innerHTML = charTag(cheering() ? 'cheer' : 'idle');
+    swapChar(p, cheering() ? 'cheer' : 'idle');
     if (reduce) return;
     p.classList.remove('bump', 'evolve'); void p.offsetWidth;
     p.classList.add(evolved ? 'evolve' : 'bump');
@@ -802,8 +878,8 @@
           '<span class="ringcount">' + (total ? done + ' of ' + total : 'nothing yet') +
           '</span></div></div></div>' +
         '<div class="petrow"><button type="button" class="pet" id="pet" data-stage="' +
-          petStage() + '"' + (petHue() ? ' style="--pet-hue:' + esc(petHue()) + '"' : '') +
-          ' aria-label="Customize ' + (S.petName ? esc(S.petName) : 'your companion') + '">' +
+          petStage() + '" aria-label="Customize ' +
+          (S.petName ? esc(S.petName) : 'your companion') + '">' +
           charTag(cheering() ? 'cheer' : 'idle') + '</button>' +
         '<p class="greeting">' + esc(greeting()) + '</p></div>') +
       '<div id="body" style="margin-top:16px"></div>';
@@ -1209,8 +1285,7 @@
     tick(12, 'done');
     focusEl.dataset.run = '0';
     focusEl.dataset.cheer = '1';
-    var img = focusEl.querySelector('.focus-char');
-    if (img) img.src = charSrc('cheer');
+    swapChar(focusEl.querySelector('.focus-stage'), 'cheer', 'focus-char');
     focusEl.querySelector('[data-time]').textContent = '';
     focusEl.querySelector('[data-sub]').textContent = 'Done.';
     focusEl.querySelector('[data-mins]').hidden = true;
@@ -1252,12 +1327,11 @@
     var held = items.filter(function (t) { return !!t.paused; }).sort(byTopic);
     var daily = live.filter(repeats).sort(byTopic);
     var rest = live.filter(function (t) { return !repeats(t); }).sort(byTopic);
-    var newTop = S.topics[0].id;
     var freq = frequentSuggestions();
 
     main.innerHTML =
-      '<div style="padding-top:6px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px">' +
-        '<div><h2 style="font-size:1.5rem">Your tasks</h2>' +
+      '<div class="headrow" style="padding-top:6px">' +
+        '<div style="flex:1;min-width:0"><h2 style="font-size:1.5rem">Your tasks</h2>' +
         '<p class="tiny" style="margin-top:3px">Everything you might do. Nothing here is a promise.</p></div>' +
         charBadge('work') +
         '<button class="iconbtn" id="topicsBtn" type="button" aria-label="Manage topics" ' +
@@ -1276,7 +1350,8 @@
              goes in on Enter, the keyboard just has no reason to leave. */
           'autocomplete="off" enterkeyhint="enter">' +
         '<button class="btn primary" id="newGo" type="button" style="width:48px;flex:none;padding:0" ' +
-          'aria-label="Add"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
+          'aria-label="Add a task, choosing its topic and repeat">' +
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" ' +
           'stroke="currentColor" stroke-width="2.4" stroke-linecap="round">' +
           '<path d="M12 5.5v13M5.5 12h13"/></svg></button></div>' +
       (freq.length ? '<span class="picklabel">You’ve added this a few times</span>' +
@@ -1285,16 +1360,9 @@
           return '<button class="pick" type="button" data-freq="' + i + '" style="--topic:' + c +
             '"><i style="background:' + c + '"></i>' + esc(x.t) + '</button>'; }).join('') +
         '</div>' : '') +
-      '<span class="picklabel">File the new one under</span>' +
-      '<div class="pickrow" id="newTop">' +
-        S.topics.map(function (t, i) {
-          return '<button class="pick" type="button" data-t="' + t.id + '" aria-pressed="' + (i === 0) +
-            '" style="--topic:' + topColor(t.id) + '"><i style="background:' + topColor(t.id) +
-            '"></i>' + esc(t.n) + '</button>'; }).join('') +
-      '</div>' +
-      '<hr class="rule" style="margin:20px 0 0">' +
+      '<hr class="rule" style="margin:18px 0 0">' +
       '<span class="picklabel">Show me</span>' +
-      '<div class="pickrow" id="filters">' +
+      '<div class="pickrow scrollrow" id="filters">' +
         '<button class="pick" type="button" data-f="all" aria-pressed="' + (filterTop === 'all') +
           '">Everything</button>' +
         S.topics.map(function (t) {
@@ -1318,27 +1386,30 @@
       (!items.length ? '<div class="empty">' + charBadge('idle', true) +
         '<h3>Nothing here yet</h3>' +
         '<p class="small">Add a task above and it will be waiting tomorrow morning.</p></div>' : '') +
-      '<p class="note" style="margin-top:18px">Tap any task to set when it repeats — ' +
-      '<b>every day</b>, <b>certain days</b> (just Tuesdays, say), or <b>once a month</b>. ' +
-      'Repeating tasks are already in your circle when the day comes round.</p>';
+      '<p class="note" style="margin-top:18px">Press <b>enter</b> to drop something on the ' +
+      'list and keep typing. Press the <b>+</b> and you get asked the rest first — what ' +
+      'to file it under, and whether it repeats <b>every day</b>, on <b>certain days</b> ' +
+      '(just Tuesdays, say), or <b>once a month</b>. Tap any task here to change either ' +
+      'later.</p>';
 
     var input = document.getElementById('newTask');
-    document.querySelectorAll('#newTop .pick').forEach(function (b) {
-      b.addEventListener('click', function () {
-        newTop = b.dataset.t;
-        document.querySelectorAll('#newTop .pick').forEach(function (x) {
-          x.setAttribute('aria-pressed', String(x.dataset.t === newTop)); });
-      });
-    });
-    /* Adding used to rebuild the whole page and then open the repeat editor
-       on top of it. Both of those take the keyboard down on a phone, which
-       makes emptying your head into the list — the single thing this app is
-       for — a stop-start business of tapping the field again between every
-       item. So the row is put in by hand, the field keeps its focus, and the
-       repeat choice waits until the row is tapped. */
-    function add() {
+
+    /* Two ways in, and the split is deliberate. The return key puts the row
+       in and leaves the keyboard exactly where it is, because emptying your
+       head into the list is the single thing this app is for and it cannot
+       be a stop-start business of tapping the field again between every
+       item. A sheet — any sheet — takes the keyboard down on a phone, and on
+       iOS it will not come back up without another tap.
+
+       The button is the considered one: it opens the sheet with whatever is
+       in the field, and asks for the topic and the repeat before the task
+       exists at all. That question used to be a wall of topic chips sitting
+       above the field, directly above the identical wall that filters the
+       list, and the repeat was not asked at all — you added the row, found
+       it again, and opened it. */
+    function quickAdd() {
       var v = input.value.trim(); if (!v) return;
-      var nt = { id: nid(), t: v, top: newTop, rep: { k: 'none' } };
+      var nt = { id: nid(), t: v, top: S.topics[0].id, rep: { k: 'none' } };
       S.library.unshift(nt);
       save(); input.value = ''; tick(10, 'add');
 
@@ -1362,8 +1433,19 @@
       var count = document.getElementById('restCount');
       if (count) count.textContent = String(Number(count.textContent || 0) + 1);
     }
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
-    document.getElementById('newGo').addEventListener('click', add);
+
+    function addWithDetails() {
+      openNewTask(input.value.trim(), function () {
+        input.value = '';
+        renderTasks();
+        var again = document.getElementById('newTask');
+        if (again) again.focus();
+      });
+    }
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); quickAdd(); } });
+    document.getElementById('newGo').addEventListener('click', addWithDetails);
     document.querySelectorAll('#freqRow .pick').forEach(function (b) {
       b.addEventListener('click', function () {
         var x = freq[Number(b.dataset.freq)]; if (!x) return;
@@ -1414,7 +1496,7 @@
   function wireLibRow(row) {
     var id = Number(row.dataset.id);
     row.querySelector('[data-act="edit"]').addEventListener('click', function () {
-      openTask(id, false);
+      openTask(id);
     });
     row.querySelector('[data-act="del"]').addEventListener('click', function () {
       var t = lib(id), ix = S.library.indexOf(t);
@@ -1476,7 +1558,7 @@
     if (!days.length) {
       main.innerHTML =
         '<div class="headrow" style="padding-top:6px">' +
-          '<div><h2 style="font-size:1.5rem">History</h2>' +
+          '<div style="flex:1;min-width:0"><h2 style="font-size:1.5rem">History</h2>' +
           '<p class="tiny" style="margin-top:3px">Everything you finish ends up here. ' +
           'Pick a day to see what was on it.</p></div>' + charBadge('cheer') + '</div>' +
         '<div class="empty" style="padding-top:22px">' + charBadge('study', true) +
@@ -1502,7 +1584,7 @@
 
     main.innerHTML =
       '<div class="headrow" style="padding-top:6px">' +
-        '<div><h2 style="font-size:1.5rem">History</h2>' +
+        '<div style="flex:1;min-width:0"><h2 style="font-size:1.5rem">History</h2>' +
         '<p class="tiny" style="margin-top:3px">' + S.history.length + ' finished in all, over ' +
         days.length + (days.length === 1 ? ' day' : ' days') + '.</p></div>' +
         charBadge('cheer') + '</div>' +
@@ -1528,23 +1610,34 @@
     var isToday = day === todayKey();
     var sorted = items.slice().sort(function (a, b) { return (b.at || 0) - (a.at || 0); });
     var rows = sorted.map(function (h) {
-      return '<div class="archrow">' +
-        '<span class="dot" style="--topic:' + topColor(h.top) + '"></span>' +
-        '<span class="archname">' + esc(h.t) + '</span>' +
-        '<span class="tiny">' + esc(topic(h.top).n) + '</span>' +
-        (isToday ? '<button class="mini" data-undo="' + h.taskId + '" type="button" ' +
-          'aria-label="Put back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
-          'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
-          '<path d="M20 12a8 8 0 10-2.5 5.8"/><path d="M20 6.5V12h-5.5"/></svg></button>' : '') +
+      return '<div class="archrow' + (isToday ? ' undoable' : '') + '" ' +
+        'style="--topic:' + topColor(h.top) + '">' +
+        '<span class="dot"></span>' +
+        '<span class="archbody"><span class="archname">' + esc(h.t) + '</span>' +
+          '<span class="archtop">' + esc(topic(h.top).n) +
+          (h.at ? ' · ' + timeOfDay(h.at) : '') + '</span></span>' +
+        /* Only today's can go back, because putting one back means putting it
+           on today — and a thing finished last Tuesday has no business
+           landing on this morning's list without being asked for. */
+        (isToday ? '<button class="undo" data-undo="' + h.taskId + '" type="button">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+          'stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M20 12a8 8 0 10-2.5 5.8"/><path d="M20 6.5V12h-5.5"/></svg>' +
+          'Put back</button>' : '') +
         '</div>';
     }).join('');
-    sheet(dayLabel(day), '<div class="archive">' + rows + '</div>', function (sh, close) {
+    sheet(dayLabel(day),
+      '<p class="tiny" style="margin:-2px 0 12px">' + items.length +
+        (items.length === 1 ? ' thing' : ' things') + ' finished' +
+        (isToday ? ' — tap Put back on anything you ticked by mistake.' : '.') + '</p>' +
+      '<div class="archive">' + rows + '</div>', function (sh, close) {
       sh.querySelectorAll('[data-undo]').forEach(function (b) {
         b.addEventListener('click', function () {
           undoTask(Number(b.dataset.undo));
           tick(8, 'undo');
           close();
           renderHistory();
+          setTimeout(function () { toast('Put back on today'); }, 260);
         });
       });
     });
@@ -1667,18 +1760,17 @@
   /* ── Task editor: name, topic, and when it repeats ──────
      This is the answer to "a task that only happens on Tuesdays": set it once
      and the day picks it up every Tuesday from then on. */
-  function openTask(id, isNew) {
-    var t = lib(id);
-    if (!t) return;
-    var draft = { t: t.t, top: t.top, rep: JSON.parse(JSON.stringify(t.rep || { k: 'none' })) };
-
-    sheet(isNew ? 'When does it repeat?' : 'Edit task',
-      '<div class="field"><label>Task</label>' +
-        '<input class="input" id="eName" maxlength="70" value="' + esc(t.t) + '"></div>' +
-      '<div class="field"><label>Topic</label><div class="pickrow" id="eTop">' +
+  /* ── Topic and repeat, in one place ───────────────────
+     These two fields have two homes now: the sheet that makes a task and the
+     sheet that edits one. They were written twice for about an hour, which is
+     exactly as long as it took for the two copies to disagree about whether a
+     topic chip wears its own colour. */
+  function draftFields(draft) {
+    return '<div class="field"><label>Topic</label><div class="pickrow" id="eTop">' +
         S.topics.map(function (tp) {
           return '<button class="pick" type="button" data-t="' + tp.id + '" aria-pressed="' +
-            (tp.id === draft.top) + '"><i style="background:' + topColor(tp.id) + '"></i>' +
+            (tp.id === draft.top) + '" style="--topic:' + topColor(tp.id) +
+            '"><i style="background:' + topColor(tp.id) + '"></i>' +
             esc(tp.n) + '</button>'; }).join('') + '</div></div>' +
       '<div class="field"><label>Repeats</label><div class="pickrow" id="eKind">' +
         [['none','Never'],['daily','Every day'],['week','Certain days'],['month','Once a month']]
@@ -1686,84 +1778,150 @@
             return '<button class="pick" type="button" data-k="' + k[0] + '" aria-pressed="' +
               (draft.rep.k === k[0]) + '">' + k[1] + '</button>'; }).join('') + '</div></div>' +
       '<div id="eDetail"></div>' +
-      '<p class="tiny" id="eSummary"></p>' +
+      '<p class="tiny" id="eSummary"></p>';
+  }
+
+  function wireDraftFields(sh, draft) {
+    var detail = sh.querySelector('#eDetail'), summary = sh.querySelector('#eSummary');
+
+    function paintDetail() {
+      if (draft.rep.k === 'week') {
+        if (!draft.rep.d) draft.rep.d = [];
+        detail.innerHTML = '<div class="pickrow" id="eDays" style="gap:5px">' +
+          WD.map(function (n, i) {
+            return '<button class="pick" type="button" data-d="' + i + '" aria-pressed="' +
+              (draft.rep.d.indexOf(i) > -1) + '" style="flex:1;justify-content:center;' +
+              'padding:9px 0">' + n + '</button>'; }).join('') + '</div>';
+        detail.querySelectorAll('[data-d]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var i = Number(b.dataset.d), at = draft.rep.d.indexOf(i);
+            if (at > -1) draft.rep.d.splice(at, 1); else draft.rep.d.push(i);
+            b.setAttribute('aria-pressed', String(draft.rep.d.indexOf(i) > -1));
+            tick(8); paintSummary();
+          });
+        });
+      } else if (draft.rep.k === 'month') {
+        if (!draft.rep.d) draft.rep.d = Math.min(parseDay(todayKey()).getDate(), 28);
+        var opts = '';
+        for (var n2 = 1; n2 <= 31; n2++) {
+          opts += '<option value="' + n2 + '"' + (n2 === draft.rep.d ? ' selected' : '') +
+            '>' + ordinal(n2) + '</option>';
+        }
+        detail.innerHTML = '<div class="field"><label>Day of the month</label>' +
+          '<select class="input" id="eDom">' + opts + '</select></div>';
+        detail.querySelector('#eDom').addEventListener('change', function (e) {
+          draft.rep.d = Number(e.target.value); paintSummary(); });
+      } else {
+        detail.innerHTML = '';
+      }
+      paintSummary();
+    }
+
+    function paintSummary() {
+      if (draft.rep.k === 'none') {
+        summary.textContent = 'Stays on your list until you choose it for a day.';
+      } else if (draft.rep.k === 'week' && !(draft.rep.d || []).length) {
+        summary.textContent = 'Pick at least one day.';
+      } else {
+        summary.innerHTML = 'Added to your day automatically · <b>' +
+          esc(repLabel(draft.rep)) + '</b>';
+      }
+    }
+
+    sh.querySelectorAll('#eTop .pick').forEach(function (b) {
+      b.addEventListener('click', function () {
+        draft.top = b.dataset.t; tick();
+        sh.querySelectorAll('#eTop .pick').forEach(function (x) {
+          x.setAttribute('aria-pressed', String(x.dataset.t === draft.top)); });
+      });
+    });
+    sh.querySelectorAll('#eKind .pick').forEach(function (b) {
+      b.addEventListener('click', function () {
+        draft.rep = { k: b.dataset.k };
+        tick();
+        sh.querySelectorAll('#eKind .pick').forEach(function (x) {
+          x.setAttribute('aria-pressed', String(x.dataset.k === draft.rep.k)); });
+        paintDetail();
+      });
+    });
+    paintDetail();
+  }
+
+  /* ── Making one ────────────────────────────────────────
+     Everything a task can be, asked once, before it exists. The tab used to
+     carry a wall of topic chips above the field for this, sitting directly
+     above the identical wall of chips that filters the list — the same eight
+     words twice, doing two unrelated jobs. And the repeat was not there at
+     all: you added the row, then found it in the list, then opened it to say
+     it happens on Tuesdays.
+
+     So the field and its button stay where they were, and the button opens
+     this. Whatever was typed comes with it. */
+  function openNewTask(prefill, afterAdd) {
+    var draft = { top: S.topics[0].id, rep: { k: 'none' } };
+    sheet('Add a task',
+      '<div class="field"><label>Task</label>' +
+        '<input class="input" id="nName" maxlength="70" placeholder="What is it?" ' +
+          'autocomplete="off" enterkeyhint="done" value="' + esc(prefill || '') + '"></div>' +
+      draftFields(draft) +
+      '<div class="sheet-foot">' +
+        '<button class="btn primary" id="nSave" type="button">Add to your list</button>' +
+      '</div>',
+      function (sh, close) {
+        wireDraftFields(sh, draft);
+        var name = sh.querySelector('#nName');
+        // Straight into the field if nothing was typed yet; if something was,
+        // leave the caret at the end of it rather than selecting it all.
+        setTimeout(function () {
+          name.focus();
+          var v = name.value; name.value = ''; name.value = v;
+        }, 90);
+
+        function commit() {
+          var v = name.value.trim();
+          if (!v) { name.focus(); return; }
+          var rep = draft.rep;
+          if (rep.k === 'week' && !(rep.d || []).length) rep = { k: 'none' };
+          var nt = { id: nid(), t: v, top: draft.top, rep: rep };
+          S.library.unshift(nt);
+          // Due today means today, not tomorrow — otherwise a task set to
+          // every day is missing from the only day you can see.
+          if (S.day && dueOn(nt, S.day.key)) onDay(nt.id);
+          save(); tick(12, 'add');
+          close();
+          setTimeout(function () {
+            if (afterAdd) afterAdd(nt); else render();
+          }, 60);
+        }
+        sh.querySelector('#nSave').addEventListener('click', commit);
+        name.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); } });
+      });
+  }
+
+  function openTask(id) {
+    var t = lib(id);
+    if (!t) return;
+    var draft = { t: t.t, top: t.top, rep: JSON.parse(JSON.stringify(t.rep || { k: 'none' })) };
+
+    sheet('Edit task',
+      '<div class="field"><label>Task</label>' +
+        '<input class="input" id="eName" maxlength="70" value="' + esc(t.t) + '"></div>' +
+      draftFields(draft) +
       '<div class="sheet-foot">' +
         '<button class="btn primary" id="eSave" type="button">Save</button>' +
-        (isNew ? '' :
-          /* Pausing is the answer to "I am not doing this for a while but I
-             am not giving up on it either" — the case where the only other
-             options were deleting something you want back later, or watching
-             it arrive every morning and ignoring it, which is how a list
-             stops being trusted. */
-          '<button class="btn quiet" id="ePause" type="button">' +
-            (t.paused ? 'Unpause this task' : 'Pause this task') + '</button>' +
-          '<button class="link" id="eDel" type="button">Delete this task</button>') +
+        /* Pausing is the answer to "I am not doing this for a while but I am
+           not giving up on it either" — the case where the only other options
+           were deleting something you want back later, or watching it arrive
+           every morning and ignoring it, which is how a list stops being
+           trusted. */
+        '<button class="btn quiet" id="ePause" type="button">' +
+          (t.paused ? 'Unpause this task' : 'Pause this task') + '</button>' +
+        '<button class="link" id="eDel" type="button">Delete this task</button>' +
       '</div>',
 
       function (sh, close) {
-        var detail = sh.querySelector('#eDetail'), summary = sh.querySelector('#eSummary');
-
-        function paintDetail() {
-          if (draft.rep.k === 'week') {
-            if (!draft.rep.d) draft.rep.d = [];
-            detail.innerHTML = '<div class="pickrow" id="eDays" style="gap:5px">' +
-              WD.map(function (n, i) {
-                return '<button class="pick" type="button" data-d="' + i + '" aria-pressed="' +
-                  (draft.rep.d.indexOf(i) > -1) + '" style="flex:1;justify-content:center;' +
-                  'padding:9px 0">' + n + '</button>'; }).join('') + '</div>';
-            detail.querySelectorAll('[data-d]').forEach(function (b) {
-              b.addEventListener('click', function () {
-                var i = Number(b.dataset.d), at = draft.rep.d.indexOf(i);
-                if (at > -1) draft.rep.d.splice(at, 1); else draft.rep.d.push(i);
-                b.setAttribute('aria-pressed', String(draft.rep.d.indexOf(i) > -1));
-                tick(8); paintSummary();
-              });
-            });
-          } else if (draft.rep.k === 'month') {
-            if (!draft.rep.d) draft.rep.d = Math.min(parseDay(todayKey()).getDate(), 28);
-            var opts = '';
-            for (var n2 = 1; n2 <= 31; n2++) {
-              opts += '<option value="' + n2 + '"' + (n2 === draft.rep.d ? ' selected' : '') +
-                '>' + ordinal(n2) + '</option>';
-            }
-            detail.innerHTML = '<div class="field"><label>Day of the month</label>' +
-              '<select class="input" id="eDom">' + opts + '</select></div>';
-            detail.querySelector('#eDom').addEventListener('change', function (e) {
-              draft.rep.d = Number(e.target.value); paintSummary(); });
-          } else {
-            detail.innerHTML = '';
-          }
-          paintSummary();
-        }
-
-        function paintSummary() {
-          if (draft.rep.k === 'none') {
-            summary.textContent = 'Stays on your list until you choose it for a day.';
-          } else if (draft.rep.k === 'week' && !(draft.rep.d || []).length) {
-            summary.textContent = 'Pick at least one day.';
-          } else {
-            summary.innerHTML = 'Added to your day automatically · <b>' +
-              esc(repLabel(draft.rep)) + '</b>';
-          }
-        }
-
-        sh.querySelectorAll('#eTop .pick').forEach(function (b) {
-          b.addEventListener('click', function () {
-            draft.top = b.dataset.t; tick();
-            sh.querySelectorAll('#eTop .pick').forEach(function (x) {
-              x.setAttribute('aria-pressed', String(x.dataset.t === draft.top)); });
-          });
-        });
-        sh.querySelectorAll('#eKind .pick').forEach(function (b) {
-          b.addEventListener('click', function () {
-            draft.rep = { k: b.dataset.k };
-            tick();
-            sh.querySelectorAll('#eKind .pick').forEach(function (x) {
-              x.setAttribute('aria-pressed', String(x.dataset.k === draft.rep.k)); });
-            paintDetail();
-          });
-        });
-        paintDetail();
+        wireDraftFields(sh, draft);
 
         sh.querySelector('#eSave').addEventListener('click', function () {
           var name = sh.querySelector('#eName').value.trim();
@@ -1867,13 +2025,42 @@
      It is deliberately only on Today. A wallpaper behind a list you are
      editing is noise; behind the one screen you open to look at, it is
      the reason to open it. */
+  /* These were six two-stop gradients off the shelf — the kind any app
+     ships, and the giveaway was that none of them used a colour this app
+     actually owns. A wallpaper that belongs here is built from the same
+     six hues as everything else on top of it, and has something in it:
+     light with a direction, a horizon, a place the colour comes from.
+     Hence layers rather than a ramp, each one anchored somewhere off the
+     edge of the screen so the source of the light is implied rather than
+     drawn. The hex is written out rather than pulled from the custom
+     properties on purpose — a wallpaper is a fixed picture, and the veil
+     over it is what answers the theme. */
   var WALLS = [
-    { id: 'dawn', n: 'Dawn',  g: 'linear-gradient(155deg,#ffd9a0 0%,#ff9a8b 45%,#a78bfa 100%)' },
-    { id: 'sea',  n: 'Sea',   g: 'linear-gradient(155deg,#9be7ff 0%,#1cb0f6 52%,#3f5efb 100%)' },
-    { id: 'moss', n: 'Moss',  g: 'linear-gradient(155deg,#e2ffc4 0%,#4ead2b 58%,#0f5f36 100%)' },
-    { id: 'dusk', n: 'Dusk',  g: 'linear-gradient(155deg,#ffb199 0%,#ff4b4b 45%,#6d28d9 100%)' },
-    { id: 'sand', n: 'Sand',  g: 'linear-gradient(155deg,#fff3e0 0%,#ffc800 50%,#ff7a00 100%)' },
-    { id: 'ink',  n: 'Ink',   g: 'linear-gradient(155deg,#5b7cb7 0%,#243b55 55%,#121c26 100%)' }
+    { id: 'sunrise', n: 'Sunrise', g:
+      'radial-gradient(130% 80% at 14% 106%,#ffb300 0%,rgba(255,179,0,0) 56%),' +
+      'radial-gradient(110% 70% at 86% 100%,#ff6b2c 0%,rgba(255,107,44,0) 60%),' +
+      'linear-gradient(168deg,#ffd98a 0%,#ffab5e 52%,#ef6d3a 100%)' },
+    { id: 'tide', n: 'Tide', g:
+      'radial-gradient(130% 64% at 50% 116%,#0067b8 0%,rgba(0,103,184,0) 66%),' +
+      'radial-gradient(96% 56% at 18% -8%,#b8ecff 0%,rgba(184,236,255,0) 58%),' +
+      'linear-gradient(176deg,#8fdcff 0%,#2ab4f5 46%,#0a72c4 100%)' },
+    { id: 'orchard', n: 'Orchard', g:
+      'radial-gradient(120% 74% at 84% 108%,#2f7a16 0%,rgba(47,122,22,0) 62%),' +
+      'radial-gradient(92% 58% at 10% 0%,#e4ffb8 0%,rgba(228,255,184,0) 58%),' +
+      'linear-gradient(172deg,#c2ea8e 0%,#74c73f 50%,#3c8c1c 100%)' },
+    { id: 'petal', n: 'Petal', g:
+      'radial-gradient(80% 54% at 16% 16%,#ffd9f2 0%,rgba(255,217,242,0) 58%),' +
+      'radial-gradient(96% 64% at 92% 74%,#a23fe0 0%,rgba(162,63,224,0) 60%),' +
+      'radial-gradient(88% 58% at 4% 106%,#ff5f9e 0%,rgba(255,95,158,0) 58%),' +
+      'linear-gradient(160deg,#f0c2ff 0%,#b86ae0 100%)' },
+    { id: 'ember', n: 'Ember', g:
+      'radial-gradient(124% 74% at 50% 112%,#ff4a3d 0%,rgba(255,74,61,0) 58%),' +
+      'radial-gradient(88% 56% at 88% 4%,#c98bff 0%,rgba(201,139,255,0) 58%),' +
+      'linear-gradient(168deg,#ffc7b4 0%,#ef5b4c 50%,#96253a 100%)' },
+    { id: 'slate', n: 'Slate', g:
+      'radial-gradient(104% 58% at 22% -8%,#eaf4f8 0%,rgba(234,244,248,0) 58%),' +
+      'radial-gradient(104% 64% at 88% 112%,#0a8fd4 0%,rgba(10,143,212,0) 62%),' +
+      'linear-gradient(174deg,#cfe0e8 0%,#7b98a8 52%,#3b5766 100%)' }
   ];
   function wallCss(w) {
     if (!w || w.k === 'none') return '';
@@ -2190,9 +2377,7 @@
     function body() {
       var stage = petStage(), n = S.history.length, next = PET_STAGES[stage];
       return '<div style="display:grid;place-items:center;gap:10px;padding:4px 0 6px">' +
-          '<span class="pet pet-big" id="petBig"' +
-            (petHue() ? ' style="--pet-hue:' + esc(petHue()) + '"' : '') + '>' +
-            charTag() + '</span>' +
+          '<span class="pet pet-big" id="petBig">' + charTag() + '</span>' +
           '<p class="small" style="text-align:center;max-width:270px">' +
             esc(petLine(stage)) + '</p>' +
         '</div>' +
@@ -2211,16 +2396,14 @@
                 (has ? '' : ' disabled') + ' aria-pressed="' + (charSex() === o[0]) +
                 '">' + o[1] + (has ? '' : ' · soon') + '</button>'; }).join('') +
           '</div></div>' +
-        /* The outfit is painted into the artwork, so this cannot repaint it.
-           What it does tint is the light he stands in, which is honest about
-           itself and still makes the corner feel chosen. */
-        '<div class="field"><label>Glow</label><div class="swatches" id="petSwatches">' +
-          SWATCHES.map(function (s) {
-            return '<button class="sw" type="button" data-petsw="' + s.id + '" aria-pressed="' +
-              (S.petColor === s.id) + '" style="background:' + (isDark() ? s.d : s.l) +
-              '" aria-label="' + s.id + '"></button>'; }).join('') +
-        '</div><p class="tiny">Tints the light around them. Their clothes come with ' +
-        'the artwork.</p></div>';
+        /* There was a row of colours here that tinted the light around them.
+           It was the only thing this screen could change, which is exactly
+           why it went: offering one knob because it is the one you can build
+           is how a customization screen ends up being about nothing. Clothes
+           are painted into the artwork, so real choices start with more
+           artwork, and this screen stays two honest fields until then. */
+        '<p class="tiny" style="margin-top:2px">Their clothes come with the ' +
+        'artwork — outfits to pick from are still to come.</p>';
     }
 
     sheet(S.petName ? esc(S.petName) : 'Your companion', body(), function (sh) {
@@ -2237,20 +2420,8 @@
           S.petSex = b.dataset.sex; save();
           sh.querySelectorAll('[data-sex]').forEach(function (x) {
             x.setAttribute('aria-pressed', String(x.dataset.sex === charSex())); });
-          var big = sh.querySelector('#petBig');
-          if (big) big.innerHTML = charTag();
-          if (petBtn) petBtn.innerHTML = charTag();
-        });
-      });
-      sh.querySelectorAll('[data-petsw]').forEach(function (b) {
-        b.addEventListener('click', function () {
-          S.petColor = b.dataset.petsw; save();
-          sh.querySelectorAll('[data-petsw]').forEach(function (x) {
-            x.setAttribute('aria-pressed', String(x.dataset.petsw === S.petColor)); });
-          var hue = petHue();
-          var big = sh.querySelector('#petBig');
-          if (big) big.style.setProperty('--pet-hue', hue);
-          if (petBtn) petBtn.style.setProperty('--pet-hue', hue);
+          swapChar(sh.querySelector('#petBig'), 'idle');
+          swapChar(petBtn, 'idle');
         });
       });
     });
@@ -2286,8 +2457,6 @@
           '<i style="width:' + Math.max(Math.round(byTop[id] / tot * 100), 3) + '%;background:' +
           topColor(id) + '"></i></div></div>'; }).join('');
 
-    var todayDone = S.history.filter(function (h) { return h.day === k; });
-    var beforeToday = S.history.length - todayDone.length;
 
     sheet('You',
       '<div style="display:flex;align-items:center;gap:13px">' +
@@ -2320,22 +2489,14 @@
       (bars ? '<div class="groupline"><span class="label">What you finish most</span></div>' +
         '<div style="display:flex;flex-direction:column;gap:11px">' + bars + '</div>' : '') +
 
-      (todayDone.length ? '<div class="groupline"><span class="label">Finished today</span></div>' +
-        '<ul class="list">' + todayDone.map(function (h) {
-          return '<li class="row"><span class="dot" style="--topic:' + topColor(h.top) + '"></span>' +
-            '<span class="row-body"><span class="row-title" style="color:var(--ink-3);' +
-            'text-decoration:line-through">' + esc(h.t) + '</span></span>' +
-            '<button class="mini" data-undo="' + h.taskId + '" type="button" aria-label="Put back">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
-            'stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 10-2.5 5.8"/>' +
-            '<path d="M20 6.5V12h-5.5"/></svg></button></li>'; }).join('') + '</ul>' +
-        '<p class="tiny">Tapped one by mistake? Put it back.</p>' : '') +
-
-      /* The itemised record itself now lives in its own tab rather than a
-         capped slice in here — this is a stats panel, not the archive. */
-      (beforeToday > 0 ? '<div class="groupline"><span class="label">Before today</span></div>' +
+      /* Putting something back belongs where the thing itself is: on Today
+         while the day is still running, and in History once it is not. This
+         screen used to carry a third copy of the same list, which was a third
+         place to keep in step and the last one anybody thought to look in. */
+      (S.history.length ? '<div class="groupline"><span class="label">The record</span></div>' +
         '<button class="link" id="goHistory" type="button" style="text-align:left;padding:2px">' +
-          beforeToday + ' more finished before today — see your full History</button>' : '') +
+          'Open History — every day you have had, and anything you need to put back' +
+        '</button>' : '') +
 
       '<div id="wallCard">' + wallHtml() + '</div>' +
 
@@ -2400,12 +2561,6 @@
         sh.querySelector('#nameIn').addEventListener('input', function (e) {
           S.name = e.target.value; save(); paint(); topAvatar(); });
 
-        sh.querySelectorAll('[data-undo]').forEach(function (b) {
-          b.addEventListener('click', function () {
-            undoTask(Number(b.dataset.undo)); close();
-            setTimeout(function () { toast('Put back on today'); }, 260);
-          });
-        });
         var goHist = sh.querySelector('#goHistory');
         if (goHist) goHist.addEventListener('click', function () { close(); goTab('history'); });
 
@@ -2438,7 +2593,7 @@
         sh.querySelector('#themeSw').addEventListener('click', function () {
           var next = isDark() ? 'light' : 'dark';
           document.documentElement.setAttribute('data-theme', next);
-          S.theme = next; save();
+          S.theme = next; save(); paintThemeColor();
           this.setAttribute('aria-checked', String(next === 'dark'));
           render();
         });
@@ -2453,7 +2608,7 @@
           localStorage.removeItem(KEY); S = fresh(); ensureDay(); save();
           document.documentElement.removeAttribute('data-theme');
           document.documentElement.removeAttribute('data-font');
-          close(); render(); topAvatar(); paintWall();
+          close(); render(); topAvatar(); paintWall(); paintThemeColor();
           // Starting over should feel like a first run, because it is one.
           seenIntro = false;
           setTimeout(welcome, 320);
@@ -2877,7 +3032,7 @@
   document.getElementById('themeBtn').addEventListener('click', function () {
     var next = isDark() ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', next);
-    S.theme = next; save(); render();
+    S.theme = next; save(); paintThemeColor(); render();
   });
 
   /* Sync gets its hooks only after the first paint. Nothing above this
@@ -2894,6 +3049,7 @@
         try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
         if (S.theme) document.documentElement.setAttribute('data-theme', S.theme);
         if (S.font) document.documentElement.setAttribute('data-font', S.font);
+        paintThemeColor();
         ensureDay();
         topAvatar();
         renderWhenFree();

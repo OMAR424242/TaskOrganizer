@@ -12,9 +12,12 @@
 <link rel="icon" href="./favicon.png" type="image/png">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 
-<!-- The status bar picks up whichever theme is active. -->
-<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#131f24" media="(prefers-color-scheme: dark)">
+<!-- The status bar above the app. One tag, not one per OS scheme: the app
+     has its own light/dark switch, and a pair of media-query tags cannot
+     answer for it when the two disagree. The value here is the light ground
+     for the first paint, and paintThemeColor() in app.js keeps it equal to
+     whatever --ground actually resolves to from then on. -->
+<meta name="theme-color" id="themeColor" content="#faf7f2">
 
 <!-- Both spellings: the first is the standard, the second is what older iOS
      still reads. Without one of them iOS opens the app in browser chrome. -->
