@@ -1,0 +1,27 @@
+{
+  "name": "one-thing",
+  "version": "1.0.0",
+  "description": "A task app that asks how much you've got, lets you pick a few things, and shows you one circle for the day. Finished tasks stay on the page, checked. Nothing punishes you for a bad week.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/ios": "^8.5.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
+    "capacitor-native-biometric": "^4.2.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5"
+  }
+}

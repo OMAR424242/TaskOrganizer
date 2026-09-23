@@ -74,13 +74,29 @@ window.OTSync = (function () {
     sdk = new Promise(function (resolve, reject) {
       if (window.supabase && window.supabase.createClient) return resolve(window.supabase);
       var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+      /* Shipped with the app, like the fonts and the artwork, rather than
+         pulled off a CDN when somebody first tries to sign in. Three reasons,
+         and they all turned out to matter:
+
+         · The offline promise. A CDN that is slow, blocked or simply not
+           there on a train made signing in fail in a way that looks exactly
+           like a broken app.
+         · Nobody outside is told who opened this. The fonts were self-hosted
+           for that reason on day one; this was the last call out.
+         · The App Store does not take kindly to an app that fetches and runs
+           code at runtime (Guideline 2.5.2). In a native shell this file is
+           part of the binary, which is what that rule is asking for.
+
+         110KB, MIT licensed — see vendor/SUPABASE-LICENSE.txt. Updating it
+         means dropping in a new copy on purpose, which is the right amount
+         of friction for the one dependency that touches an account. */
+      s.src = './vendor/supabase.js';
       s.async = true;
       s.onload = function () {
         if (window.supabase && window.supabase.createClient) resolve(window.supabase);
         else reject(new Error('Sync library loaded but looked wrong.'));
       };
-      s.onerror = function () { reject(new Error('Could not reach the sync service.')); };
+      s.onerror = function () { reject(new Error('Could not load the sync library.')); };
       document.head.appendChild(s);
     });
     return sdk;
@@ -404,6 +420,54 @@ window.OTSync = (function () {
       return sync().then(function () { return client(); })
         .then(function (c) { return c.auth.signOut(); })
         .then(function () { user = null; stopPolling(); stopRealtime(); setStatus('signedout'); });
+    },
+
+    /* The opposite of signUp, and the one both app stores insist on: an
+       account you can end from inside the app, without emailing anybody.
+
+       Nothing is pushed first. Everywhere else in this file the reflex is
+       to save before letting go of the session — here that reflex would be
+       exactly wrong, because it would write the document back up to a
+       server the next line is about to wipe.
+
+       The real work happens in supabase/functions/delete-account, because
+       removing an auth user needs the service_role key and that key can
+       never be on a phone. All this does is hand over the session and read
+       the answer. */
+    deleteAccount: function () {
+      if (!user) return Promise.reject(new Error('You are not signed in.'));
+      stopPolling();
+      stopRealtime();
+      clearTimeout(pushTimer);
+      return client()
+        .then(function (c) {
+          return c.functions.invoke('delete-account', { method: 'POST' })
+            .then(function (r) {
+              // A failing function comes back as an error object with the
+              // body attached rather than as a thrown exception, and the
+              // body is where the reason lives.
+              if (r.error) {
+                var said = r.data && r.data.error;
+                if (!said && r.error.context && typeof r.error.context.json === 'function') {
+                  return r.error.context.json()
+                    .then(function (b) { throw new Error((b && b.error) || r.error.message); })
+                    .catch(function (e) { throw e instanceof Error ? e : r.error; });
+                }
+                throw new Error(said || r.error.message || 'Could not delete the account.');
+              }
+              return c.auth.signOut();
+            });
+        })
+        .then(function () {
+          user = null;
+          setStatus('signedout');
+        })
+        .catch(function (e) {
+          // Put the machinery back: the account is still there, so the app
+          // should carry on syncing rather than sitting silently broken.
+          if (user) { startPolling(); startRealtime(); }
+          throw e;
+        });
     },
 
     friendly: friendly,

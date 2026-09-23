@@ -682,6 +682,36 @@ main.enter > *{animation:rowIn 180ms var(--e-out) backwards}
   padding:10px;width:100%;text-transform:uppercase;letter-spacing:.05em;
   font-family:var(--font)}
 .link:hover{color:var(--blue)}
+/* The one link in the app that should give you pause before you tap it.
+   Still quiet at rest — red text under a sign-out button would read as an
+   error rather than an option — and unmistakable once you are on it. */
+.link.danger{color:var(--ink-3)}
+.link.danger:hover{color:var(--red)}
+
+/* A list that is being read rather than acted on, so no dots-as-topics and
+   no row chrome — just legible lines with room to breathe. */
+ul.plain{list-style:disc;margin:0;padding:0 0 0 20px;display:flex;
+  flex-direction:column;gap:6px}
+ul.plain li{font-size:.88rem;font-weight:600;color:var(--ink-2);line-height:1.45}
+
+/* ═══════════ THE LOCK ═══════════
+   Only ever seen in the installed app. It goes up *before* the phone is
+   asked for a face, not after — otherwise there is a frame where the list
+   is readable behind the prompt, and the app switcher takes its thumbnail
+   from exactly that frame. Opaque, not blurred: a blur of your own list is
+   still a picture of your own list. */
+.lockveil{position:fixed;inset:0;z-index:300;display:grid;place-items:center;
+  align-content:center;gap:14px;
+  background-color:var(--ground);background-image:var(--grain);
+  background-repeat:repeat}
+.lockveil p{margin:0;font-size:1.1rem;font-weight:900;letter-spacing:-.01em;
+  color:var(--ink-2)}
+.lockveil .lockchar{height:150px}
+.lockveil.out{animation:lockGo var(--t4) var(--e-out) forwards}
+@keyframes lockGo{to{opacity:0;visibility:hidden}}
+@media (prefers-reduced-motion:reduce){
+  .lockveil.out{animation:none;opacity:0;visibility:hidden}
+}
 
 /* ═══════════ EMPTY ═══════════ */
 .empty{text-align:center;padding:22px 10px;display:grid;gap:10px;justify-items:center}
@@ -1121,6 +1151,72 @@ hr.rule{border:none;border-top:2px solid var(--rule);margin:4px 0}
 .focus[data-run="1"][data-pose="move"][data-body="f"]{--pose-t:2.8s}
 .focus[data-run="1"][data-pose="move"][data-body="f"] .focus-char {animation-name:poseStretch}
 .focus[data-run="1"][data-pose="move"][data-body="f"] .focus-shade{animation-name:shadeSoft}
+
+/* ── The seven that came in on the second sheet ──────────
+   Same discipline as the first set: one path each rather than one bob at
+   seven speeds, every keyframe listing the same transform functions in the
+   same order, and the pivot at the feet.
+
+   Two of these break the feet rule on purpose. Sleeping and gaming are not
+   standing poses — one is lying down and one is sunk into a beanbag — so a
+   pivot at the feet would swing them like a pendulum hinged at the floor.
+   Both get the pivot moved to the middle, where the weight actually is. */
+@keyframes poseScrub{                 /* washing: small and quick */
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  25%    {transform:translateX(2.5px) translateY(-1px) rotate(.7deg) scaleY(1)}
+  75%    {transform:translateX(-2.5px) translateY(-1px) rotate(-.7deg) scaleY(1)}}
+@keyframes poseBreathe{               /* sleeping: the slowest thing here */
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  50%    {transform:translateX(0) translateY(-2px) rotate(0deg) scaleY(1.012)}}
+@keyframes poseSweep{                 /* cleaning: a long push and back */
+  0%,100%{transform:translateX(-5px) translateY(0) rotate(-1deg) scaleY(1)}
+  50%    {transform:translateX(5px) translateY(-1px) rotate(1deg) scaleY(1)}}
+@keyframes poseFold{                  /* laundry: a steady lift and set down */
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  40%    {transform:translateX(0) translateY(-5px) rotate(0deg) scaleY(1.008)}
+  70%    {transform:translateX(0) translateY(-1px) rotate(0deg) scaleY(1)}}
+@keyframes poseTip{                   /* watering: lean in, hold, come back */
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  35%    {transform:translateX(2px) translateY(-1px) rotate(1.6deg) scaleY(1)}
+  65%    {transform:translateX(2px) translateY(-1px) rotate(1.6deg) scaleY(1)}}
+@keyframes poseLean{                  /* gaming: the way people actually sit */
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  30%    {transform:translateX(-2px) translateY(-1px) rotate(-.9deg) scaleY(1)}
+  65%    {transform:translateX(3px) translateY(0) rotate(1.1deg) scaleY(1)}}
+@keyframes poseStrum{                 /* music: on a beat, not a breath */
+  0%,100%{transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  25%    {transform:translateX(0) translateY(-3px) rotate(.8deg) scaleY(1)}
+  50%    {transform:translateX(0) translateY(0) rotate(0deg) scaleY(1)}
+  75%    {transform:translateX(0) translateY(-2px) rotate(-.8deg) scaleY(1)}}
+
+.focus[data-run="1"][data-pose="sleep"]  {--pose-t:5.4s}
+.focus[data-run="1"][data-pose="clean"]  {--pose-t:2.1s}
+.focus[data-run="1"][data-pose="laundry"]{--pose-t:2.6s}
+.focus[data-run="1"][data-pose="plants"] {--pose-t:3.2s}
+.focus[data-run="1"][data-pose="game"]   {--pose-t:2.4s}
+.focus[data-run="1"][data-pose="music"]  {--pose-t:1.15s}
+
+.focus[data-run="1"][data-pose="wash"]   .focus-char{animation-name:poseScrub}
+.focus[data-run="1"][data-pose="sleep"]  .focus-char{animation-name:poseBreathe}
+.focus[data-run="1"][data-pose="clean"]  .focus-char{animation-name:poseSweep}
+.focus[data-run="1"][data-pose="laundry"] .focus-char{animation-name:poseFold}
+.focus[data-run="1"][data-pose="plants"] .focus-char{animation-name:poseTip}
+.focus[data-run="1"][data-pose="game"]   .focus-char{animation-name:poseLean}
+.focus[data-run="1"][data-pose="music"]  .focus-char{animation-name:poseStrum}
+
+/* The ground moves with them where there is ground to move. Sleeping and
+   gaming have none worth speaking of — a bed and a beanbag already sit on
+   the floor — so their contact shadow just breathes with the figure. */
+.focus[data-run="1"][data-pose="clean"]  .focus-shade{animation-name:shadeSway}
+.focus[data-run="1"][data-pose="plants"] .focus-shade{animation-name:shadeSway}
+.focus[data-run="1"][data-pose="music"]  .focus-shade{animation-name:shadeSway}
+
+/* Neither of these is standing, so the pivot comes off the feet. */
+.focus[data-pose="sleep"] .focus-char,
+.focus[data-pose="game"]  .focus-char{transform-origin:50% 62%}
+/* And a figure lying in bed has no contact shadow to cast; the bed is the
+   thing on the floor, and it is drawn already. */
+.focus[data-pose="sleep"] .focus-shade{opacity:0}
 
 /* ── Effects ─────────────────────────────────────────────
    Three particles, parked and invisible, given a job by whatever pose is on
