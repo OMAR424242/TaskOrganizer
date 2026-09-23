@@ -69,7 +69,26 @@ def main():
         art_subs.append(("'./art/%s'" % fname,
                          "'data:image/webp;base64,%s'" % b64))
 
-    for name in ('config.js', 'sync.js', 'app.js'):
+    # sync.js loads the Supabase library by relative path the first time
+    # somebody signs in, and a single file has nowhere to load it from. It
+    # becomes a data URI — the same treatment the fonts and the artwork get,
+    # and for the same reason.
+    #
+    # Not an inline <script> block, which is the obvious move and does not
+    # work: the library is a webpack bundle that reads
+    # `document.currentScript.src` at startup to work out where to fetch its
+    # own lazy chunks from, and an inline script has no src. It throws
+    # "Automatic publicPath is not supported in this browser" and nothing
+    # loads. A data URI is a src, so that check passes; the one lazy chunk it
+    # would ever want is concatenated onto the end of the file and already
+    # registered, so nothing is ever actually fetched.
+    with open(os.path.join(HERE, 'vendor', 'supabase.js'), 'rb') as f:
+        vendor_raw = f.read()
+    assert b'createClient' in vendor_raw, 'vendor/supabase.js does not look like the library'
+    vendor_uri = 'data:text/javascript;base64,' + \
+        base64.b64encode(vendor_raw).decode('ascii')
+
+    for name in ('config.js', 'native.js', 'sync.js', 'app.js'):
         tag = '<script src="./%s"></script>' % name
         assert html.count(tag) == 1, '%s script tag not found exactly once' % name
         js = read(name).replace('</script>', "<\\/script>")
@@ -77,6 +96,10 @@ def main():
             for ref, uri in art_subs:
                 assert js.count(ref) == 1, 'art ref not found exactly once: %s' % ref
                 js = js.replace(ref, uri)
+        if name == 'sync.js':
+            ref = "'./vendor/supabase.js'"
+            assert js.count(ref) == 1, 'sync library ref not found exactly once'
+            js = js.replace(ref, "'" + vendor_uri + "'")
         html = html.replace(tag, '<script>\n' + js + '\n</script>')
 
     # An artifact has no service worker, no manifest and no icon files next to
@@ -118,6 +141,11 @@ def main():
     # inside a script, where the check above cannot see it.
     if './art/' in html:
         print('STILL EXTERNAL: a ./art/ path survived into the built page')
+        return 1
+
+    # And the sync library is named from inside a script too.
+    if './vendor/' in html:
+        print('STILL EXTERNAL: a ./vendor/ path survived into the built page')
         return 1
 
     print('wrote %s  (%d KB)' % (OUT, len(html.encode('utf-8')) // 1024))
