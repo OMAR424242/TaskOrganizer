@@ -108,6 +108,11 @@
       // The one task with a timer on it, if any: { id, at, mins, rang }.
       // One at a time, on purpose — see openFocus().
       focus: null,
+      /* Both of these only mean anything inside the native app, and both
+         are off until asked for. remind is { h, m } once it is on — the
+         hour a notification arrives, scheduled on the device itself. */
+      remind: null,
+      lock: false,
       day: null, history: [], removed: [], libDel: [], topDel: []
     };
   }
@@ -128,6 +133,8 @@
   if (typeof S.petColor !== 'string') S.petColor = '';
   if (typeof S.petSex !== 'string') S.petSex = 'm';
   if (!S.focus || typeof S.focus !== 'object') S.focus = null;
+  if (S.remind && typeof S.remind !== 'object') S.remind = null;
+  if (typeof S.lock !== 'boolean') S.lock = false;
 
   /* The six wallpapers were redrawn and renamed. An id that no longer exists
      produces no wallpaper at all and looks like the setting was lost, so each
@@ -177,6 +184,43 @@
     if (saveT) clearTimeout(saveT);
     saveT = setTimeout(flushSave, 80);
     if (window.OTSync) OTSync.touch();
+    pushWidget();
+  }
+
+  /* ── What the home screen says ─────────────────────────
+     Already-rendered strings rather than the state itself. The widget
+     holds no rules about repeats, day-start hours or what counts as
+     today, so it cannot drift out of agreement with the app — there is
+     nothing there to drift. It draws exactly what it was handed.
+
+     Called on every save, which is often; the comparison at the bottom
+     is what stops that being a redraw of the home screen every time
+     somebody types a letter into a task name. */
+  var lastWidget = '';
+  function pushWidget() {
+    if (!window.OTNative || !OTNative.is) return;
+    if (!S.day) return;
+    var open, done;
+    try {
+      open = openIds().map(lib).filter(Boolean);
+      done = S.day.done.filter(function (id) { return lib(id); }).length;
+    } catch (e) { return; }
+    var next = open[0];
+    var payload = {
+      title: next ? next.t
+           : done ? 'That\u2019s the day.'
+           : 'Nothing on today yet',
+      topic: next ? topic(next.top).n : '',
+      colour: next ? topColor(next.top) : '',
+      done: done,
+      total: done + open.length,
+      empty: !next,
+      day: S.day.key
+    };
+    var line = JSON.stringify(payload);
+    if (line === lastWidget) return;
+    lastWidget = line;
+    OTNative.widget(payload);
   }
   window.addEventListener('pagehide', flushSave);
   window.addEventListener('beforeunload', flushSave);
@@ -446,7 +490,13 @@
   /* One call for both channels of feedback, so every place that already
      buzzes also speaks, and neither can be forgotten at a new call site. */
   function tick(ms, kind) {
-    try { if (navigator.vibrate) navigator.vibrate(ms || 10); } catch (e) {}
+    /* Three ways to answer the same press, and a device takes whichever it
+       has. Inside the native shell it is the taptic engine — a real tap
+       rather than the blunt motor buzz navigator.vibrate gives you, and on
+       an iPhone the only one of the three that does anything at all, since
+       Safari has never implemented vibrate. */
+    if (window.OTNative && OTNative.is) OTNative.haptic(kind || 'tap');
+    else { try { if (navigator.vibrate) navigator.vibrate(ms || 10); } catch (e) {} }
     play(kind || 'tap');
   }
   function el(h) { var d = document.createElement('div'); d.innerHTML = h; return d.firstElementChild; }
@@ -621,24 +671,36 @@
      A body is only offered in the picker if its idle exists. */
   var CHAR_ART = {
     m: {
-      idle:  './art/char-m-idle.webp',
-      cook:  './art/char-m-cook.webp',
-      move:  './art/char-m-move.webp',
-      eat:   './art/char-m-eat.webp',
-      study: './art/char-m-study.webp',
-      work:  './art/char-m-work.webp',
-      cheer: './art/char-m-cheer.webp',
-      wash:  null
+      idle:    './art/char-m-idle.webp',
+      cook:    './art/char-m-cook.webp',
+      move:    './art/char-m-move.webp',
+      eat:     './art/char-m-eat.webp',
+      study:   './art/char-m-study.webp',
+      work:    './art/char-m-work.webp',
+      cheer:   './art/char-m-cheer.webp',
+      wash:    './art/char-m-wash.webp',
+      sleep:   './art/char-m-sleep.webp',
+      clean:   './art/char-m-clean.webp',
+      laundry: './art/char-m-laundry.webp',
+      plants:  './art/char-m-plants.webp',
+      game:    './art/char-m-game.webp',
+      music:   './art/char-m-music.webp'
     },
     f: {
-      idle:  './art/char-f-idle.webp',
-      cook:  './art/char-f-cook.webp',
-      move:  './art/char-f-move.webp',
-      eat:   './art/char-f-eat.webp',
-      study: './art/char-f-study.webp',
-      work:  './art/char-f-work.webp',
-      cheer: './art/char-f-cheer.webp',
-      wash:  null
+      idle:    './art/char-f-idle.webp',
+      cook:    './art/char-f-cook.webp',
+      move:    './art/char-f-move.webp',
+      eat:     './art/char-f-eat.webp',
+      study:   './art/char-f-study.webp',
+      work:    './art/char-f-work.webp',
+      cheer:   './art/char-f-cheer.webp',
+      wash:    './art/char-f-wash.webp',
+      sleep:   './art/char-f-sleep.webp',
+      clean:   './art/char-f-clean.webp',
+      laundry: './art/char-f-laundry.webp',
+      plants:  './art/char-f-plants.webp',
+      game:    './art/char-f-game.webp',
+      music:   './art/char-f-music.webp'
     }
   };
   function charSex() { return (CHAR_ART[S.petSex] || {}).idle ? S.petSex : 'm'; }
@@ -725,6 +787,21 @@
      second and a half when something is actually ticked off, which is the
      moment it is about. */
   var POSE_WORDS = [
+    /* Order is the whole design of this list, and it is not alphabetical or
+       historical — it is most-specific-first, because the first list to
+       match wins and a broad word in an early list swallows everything
+       under it. Each of the moves below was made to fix a real sentence:
+
+         clean above cook      "clean the kitchen" is not cooking
+         laundry above wash    "ironing" is not your face
+         eat above plants      "drink water" is not gardening
+         music above study     "guitar practice" is not revision
+         work last             its list is the broadest of all */
+    ['clean', ['clean*','tidy*','tidies','hoover*','vacuum*','vacuuming','mop','mops',
+               'mopping','dust','dusting','sweep*','swept','scrub*','declutter*','polish*',
+               'bin','bins','rubbish','recycling','trash','floors','windows','hoovering']],
+    ['laundry', ['laundry','launder*','ironing','iron','clothes','fold','folds','folding',
+                 'dryer','tumble','bedding','sheets','towels','duvet','socks','wardrobe']],
     ['cook',  ['cook*','bak*','recipe*','kitchen','dish*','chop*','roast*','fry','frying',
                'oven','grill*','simmer*','marinat*','dinnertime']],
     ['move',  ['gym','workout*','exercis*','run','runs','running','jog*','walk*','hike',
@@ -734,13 +811,22 @@
     ['eat',   ['eat*','ate','breakfast','lunch*','dinner','supper','brunch','snack*','food',
                'meal*','drink*','hydrat*','coffee','tea','juice','smoothie','protein',
                'vitamin*','supplement*','meds','medication*','pill*']],
+    ['plants', ['plant*','garden*','flowers','weeding','weeds','lawn','mow','mows','mowing',
+                'repot*','seedling*','compost*','herbs']],
     ['wash',  ['shower*','bath','bathe','wash*','brush*','teeth','tooth','floss*','skincare',
                'skin','face','shav*','hair','nails','groom*','hygiene','moisturis*',
                'moisturiz*','sunscreen','deodorant','makeup','shampoo*']],
+    ['sleep', ['sleep*','slept','bed','bedtime','nap','naps','napping','lie','rest','rested',
+               'resting','duvet-day','siesta','snooze']],
+    ['music', ['guitar*','piano*','keyboard','violin','drums','drumming','bass','ukulele',
+               'sing','sings','singing','choir','band','instrument*','scales','chords',
+               'busk*','compose','composing','songwriting']],
+    ['game',  ['game','games','gaming','xbox','playstation','ps4','ps5','nintendo','steam',
+               'minecraft','fortnite','console','controller','speedrun*','raid']],
     ['study', ['stud*','read*','homework','essay*','assignment*','revis*','exam*','note',
                'notes','lecture*','class','classes','course*','book','books','chapter*',
                'learn*','journal*','practic*','research*','flashcard*','thesis']],
-    /* Two desk poses came back from the same sheet — one sitting with a book,
+    /* Two desk poses came back from the first sheet — one sitting with a book,
        one standing with a laptop — so reading and screen work stopped having
        to share a drawing. Studying is the seated one; everything that is
        really admin is the laptop. */
@@ -750,11 +836,17 @@
                'slides','deck','cv','resume','meeting*','project*','expenses','sort*',
                'file','filing','submit','renew*','book*ing','print*']]
   ];
-  /* The handful of two-word phrases the lists above would read the wrong way
-     round on their own. "Wash up" is the sink, not your face, and no amount
-     of reordering the lists fixes that without breaking the other one. */
+  /* The two-word phrases the lists above would read the wrong way round on
+     their own. "Wash up" is the sink, not your face; "the washing" is a
+     machine full of clothes, but "washing up" is still the sink; and
+     "clean my teeth" is the one sentence where cleaning means a toothbrush.
+     Checked in this order, before any single word is looked at. */
   var POSE_PHRASES = [
     ['cook', ['wash up', 'washing up', 'meal prep']],
+    ['wash', ['clean my teeth', 'clean teeth', 'clean your teeth']],
+    ['laundry', ['the washing', 'washing machine', 'wash the clothes', 'put a wash']],
+    ['clean', ['wash the car', 'wash the floor', 'wash the windows']],
+    ['plants', ['water the plant', 'watering the plant', 'water plants']],
     ['move', ['work out', 'press up', 'sit up', 'push up']]
   ];
   function taskPose(title) {
@@ -2242,6 +2334,11 @@
           (st === 'err' && sy.error ? '<div class="authmsg err">' + esc(sy.error) + '</div>' : '') +
           '<button class="btn quiet" id="syncNow" type="button">Sync now</button>' +
           '<button class="link" id="signOut" type="button">Sign out</button>' +
+          /* Not buried, not a support email, not a form on a website. Both
+             app stores require an account you can end from inside the app,
+             and Apple's 5.1.1(v) is specific that it has to be findable —
+             so it sits with the account it deletes, one tap from here. */
+          '<button class="link danger" id="delAcct" type="button">Delete my account</button>' +
         '</div>';
     }
 
@@ -2292,6 +2389,9 @@
         sy.signOut().then(function () { reopenProfile(); });
       });
     }
+
+    var del = sh.querySelector('#delAcct');
+    if (del) del.addEventListener('click', function () { openDeleteAccount(); });
 
     var go = sh.querySelector('#auGo');
     if (!go) return;
@@ -2367,6 +2467,202 @@
   function reopenProfile() {
     document.querySelectorAll('.sheet,.scrim').forEach(function (n) { n.remove(); });
     openProfile();
+  }
+
+  /* ── The two settings that need a phone ────────────────
+     Neither of these can work in a browser tab, so on the web they are
+     not rendered at all rather than shown greyed out with an
+     explanation. A setting you cannot use is worse than a setting that
+     is not there: the first is a small disappointment every time the
+     screen is opened, the second is nothing.
+
+     The reminder is a local notification and nothing else — built on
+     the device, delivered by the device, never sent anywhere. That is
+     the honest answer on both stores' privacy forms, and it stays the
+     honest answer with this switched on. */
+  var HOURS = [6, 7, 8, 9, 10, 12, 18, 20];
+  function remindLabel(h) {
+    var ampm = h < 12 ? 'am' : 'pm';
+    var n = h % 12 === 0 ? 12 : h % 12;
+    return n + ampm;
+  }
+  function phoneSettingsHtml() {
+    var N = window.OTNative;
+    if (!N || !N.is) return '';
+    var on = !!S.remind, hour = S.remind ? S.remind.h : 9;
+    return '<div class="groupline"><span class="label">On this phone</span></div>' +
+      '<div class="switchrow"><span style="font-size:.9rem">A nudge each day</span>' +
+        '<button class="switch" id="remindSw" role="switch" aria-checked="' + on +
+        '"><span></span></button></div>' +
+      '<div class="field" id="remindWhen"' + (on ? '' : ' hidden') + '>' +
+        '<label>What time</label>' +
+        '<div class="pickrow scrollrow" id="remindHours">' +
+          HOURS.map(function (h) {
+            return '<button class="pick" type="button" data-h="' + h + '" aria-pressed="' +
+              (h === hour) + '">' + remindLabel(h) + '</button>'; }).join('') +
+        '</div>' +
+        '<p class="tiny">One notification, asking what today’s one thing is. ' +
+        'It is made on this phone and never leaves it.</p></div>' +
+      '<div class="switchrow" id="lockRow" hidden>' +
+        '<span style="font-size:.9rem" id="lockWord">Lock the app</span>' +
+        '<button class="switch" id="lockSw" role="switch" aria-checked="' + !!S.lock +
+        '"><span></span></button></div>' +
+      '<p class="tiny" id="lockNote" hidden>Asks before opening. A list of what you ' +
+      'have not done yet is a more personal document than it looks.</p>';
+  }
+
+  function wirePhoneSettings(sh) {
+    var N = window.OTNative;
+    if (!N || !N.is) return;
+
+    function applyRemind() {
+      if (!S.remind) return N.cancelRemind();
+      return N.scheduleRemind(S.remind.h, S.remind.m || 0);
+    }
+
+    var sw = sh.querySelector('#remindSw');
+    if (sw) sw.addEventListener('click', function () {
+      var turningOn = !S.remind;
+      if (!turningOn) {
+        S.remind = null; save(); applyRemind();
+        sw.setAttribute('aria-checked', 'false');
+        var w0 = sh.querySelector('#remindWhen'); if (w0) w0.hidden = true;
+        tick(8, 'undo');
+        return;
+      }
+      // Ask the OS first. Saying no here must leave the switch off rather
+      // than on-but-silent, which is the version people report as broken.
+      N.askRemind().then(function (granted) {
+        if (!granted) {
+          sw.setAttribute('aria-checked', 'false');
+          toast('Notifications are off for One Thing in your phone’s settings.');
+          return;
+        }
+        S.remind = { h: 9, m: 0 }; save(); applyRemind();
+        sw.setAttribute('aria-checked', 'true');
+        var w1 = sh.querySelector('#remindWhen'); if (w1) w1.hidden = false;
+        tick(10, 'add');
+      });
+    });
+
+    sh.querySelectorAll('#remindHours .pick').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (!S.remind) return;
+        S.remind.h = Number(b.dataset.h); save(); applyRemind(); tick();
+        sh.querySelectorAll('#remindHours .pick').forEach(function (x) {
+          x.setAttribute('aria-pressed', String(Number(x.dataset.h) === S.remind.h)); });
+      });
+    });
+
+    // The lock row appears only once the phone has confirmed it can do it,
+    // and it is named after whatever this particular phone actually has.
+    N.lockAvailable().then(function (able) {
+      if (!able) return;
+      var row = sh.querySelector('#lockRow'), note = sh.querySelector('#lockNote');
+      if (!row) return;
+      row.hidden = false;
+      if (note) note.hidden = false;
+      N.lockName().then(function (name) {
+        var w = sh.querySelector('#lockWord');
+        if (w && name) w.textContent = 'Open with ' + name;
+      });
+      var ls = sh.querySelector('#lockSw');
+      ls.addEventListener('click', function () {
+        if (S.lock) { S.lock = false; save(); ls.setAttribute('aria-checked', 'false'); tick(8, 'undo'); return; }
+        // Prove it works before relying on it. Turning on a lock you then
+        // cannot pass is how somebody loses their own list.
+        N.unlock('Turn on the lock for One Thing').then(function (okNow) {
+          if (!okNow) { toast('Not turned on — that did not check out.'); return; }
+          S.lock = true; save(); ls.setAttribute('aria-checked', 'true'); tick(10, 'add');
+        });
+      });
+    });
+  }
+
+  /* ── Ending an account ─────────────────────────────────
+     The one screen in the app written to be slightly hard to use. Every
+     other confirmation here is a single tap, because every other thing
+     here can be undone — a ticked task goes back, a deleted task toasts
+     with an undo, a wiped device still has the account behind it. This
+     cannot be undone by anyone, so it asks you to type the word.
+
+     It also says plainly which of the two things you are doing. They are
+     genuinely separate: the account lives on a server and the tasks live
+     on this phone, and somebody deleting an account because they no longer
+     want it synced may well want to keep using the app. Unticking the box
+     leaves the list exactly where it is, just no longer anybody's. */
+  function openDeleteAccount() {
+    var sy = window.OTSync;
+    if (!sy || !sy.signedIn) return;
+    var email = sy.email;
+
+    sheet('Delete your account',
+      '<p class="small" style="margin-top:0">This ends the account for ' +
+        '<b>' + esc(email) + '</b>. It cannot be undone, and support cannot ' +
+        'bring it back.</p>' +
+      '<div class="groupline"><span class="label">What goes</span></div>' +
+      '<ul class="plain">' +
+        '<li>Your account and its email address.</li>' +
+        '<li>Everything stored on the server — tasks, topics, history, settings.</li>' +
+        '<li>Any other device signed in to it stops syncing.</li>' +
+      '</ul>' +
+      '<div class="groupline"><span class="label">And on this phone</span></div>' +
+      '<label class="switchrow" for="delLocal" style="cursor:pointer">' +
+        '<span style="font-size:.9rem">Erase everything here too</span>' +
+        '<input type="checkbox" id="delLocal" checked ' +
+          'style="width:22px;height:22px;accent-color:var(--red)"></label>' +
+      '<p class="tiny">Leave this on and the app starts over, empty. Turn it off ' +
+        'and your list stays on this phone, no longer attached to any account.</p>' +
+      '<div class="field" style="margin-top:14px">' +
+        '<label for="delWord">Type <b>DELETE</b> to confirm</label>' +
+        '<input class="input" id="delWord" autocomplete="off" autocapitalize="characters" ' +
+          'spellcheck="false" placeholder="DELETE"></div>' +
+      '<div class="authmsg err hidden" id="delMsg"></div>' +
+      '<div class="sheet-foot">' +
+        '<button class="btn danger" id="delGo" type="button" disabled>' +
+          'Delete my account</button>' +
+        '<button class="link" data-close type="button">Keep my account</button>' +
+      '</div>',
+
+      function (sh, close) {
+        var word = sh.querySelector('#delWord'),
+            go   = sh.querySelector('#delGo'),
+            msg  = sh.querySelector('#delMsg');
+
+        word.addEventListener('input', function () {
+          go.disabled = word.value.trim().toUpperCase() !== 'DELETE';
+        });
+
+        go.addEventListener('click', function () {
+          go.disabled = true;
+          go.textContent = 'Deleting…';
+          msg.classList.add('hidden');
+          var alsoLocal = sh.querySelector('#delLocal').checked;
+
+          sy.deleteAccount().then(function () {
+            if (alsoLocal) {
+              localStorage.removeItem(KEY);
+              S = fresh();
+              ensureDay();
+              save();
+              document.documentElement.removeAttribute('data-theme');
+              document.documentElement.removeAttribute('data-font');
+              seenIntro = false;
+            }
+            close();
+            render(); topAvatar(); paintWall(); paintThemeColor();
+            setTimeout(function () {
+              toast(alsoLocal ? 'Account deleted. Starting over.' : 'Account deleted.');
+            }, 300);
+            if (alsoLocal) setTimeout(welcome, 900);
+          }).catch(function (e) {
+            go.disabled = false;
+            go.textContent = 'Delete my account';
+            msg.textContent = (e && e.message) || 'Could not delete the account.';
+            msg.classList.remove('hidden');
+          });
+        });
+      });
   }
 
   /* ── Companion sheet ──────────────────────────────────────
@@ -2528,6 +2824,10 @@
       '<div class="switchrow"><span style="font-size:.9rem">Sounds</span>' +
         '<button class="switch" id="soundSw" role="switch" aria-checked="' + !!S.sound +
         '"><span></span></button></div>' +
+      /* Two settings that only exist inside the installed app, and that
+         say so by simply not being here otherwise rather than sitting
+         greyed out on the web explaining themselves. */
+      phoneSettingsHtml() +
       '<button class="link" id="wipe" type="button" style="margin-top:4px">Reset everything</button>',
 
       function (sh, close) {
@@ -2566,6 +2866,7 @@
 
         wireAccount(sh);
         wireWall(sh);
+        wirePhoneSettings(sh);
 
         function note() {
           sh.querySelector('#hourNote').innerHTML = 'Something finished at 1am counts toward ' +
@@ -3080,4 +3381,71 @@
   // A first run gets the welcome; every run after that gets the morning
   // question. They never both appear, and neither ever blocks the app.
   setTimeout(S.onboarded ? morning : welcome, S.onboarded ? 400 : 320);
+
+  /* ── The native shell, if there is one ─────────────────
+     Everything below does nothing in a browser. */
+  if (window.OTNative && OTNative.is) {
+    // The splash comes down when the app has actually drawn, not when the
+    // web view finished loading — those are different moments, and the gap
+    // between them is a blank white screen.
+    OTNative.ready();
+
+    /* The lock. A cover goes over the app first and the question is asked
+       underneath it, so there is never a frame where the list is readable
+       behind the prompt — including in the app switcher, which takes its
+       thumbnail from whatever is on screen when you leave. */
+    var cover = null;
+    function coverUp() {
+      if (cover || !S.lock) return;
+      cover = el('<div class="lockveil" role="presentation">' +
+        charTag('idle', 'lockchar') + '<p>One Thing</p></div>');
+      document.body.appendChild(cover);
+    }
+    function uncover() {
+      if (!cover) return;
+      var c = cover; cover = null;
+      c.classList.add('out');
+      setTimeout(function () { c.remove(); }, 260);
+    }
+    function askLock() {
+      if (!S.lock) return;
+      coverUp();
+      OTNative.unlock('Open One Thing').then(function (ok) {
+        if (ok) uncover();
+        // Refusing leaves the cover up. There is no second prompt and no
+        // way past it except succeeding, which is the point of a lock.
+      });
+    }
+    askLock();
+
+    /* Coming back from the app switcher is the case that matters: the app
+       was never closed, so nothing above would have run again. */
+    var wentAway = 0;
+    OTNative.onResume(function () {
+      // A glance at a notification should not demand a face. Anything over
+      // half a minute away counts as having left.
+      if (S.lock && Date.now() - wentAway > 30000) askLock();
+      if (typeof ensureDay === 'function') { ensureDay(); render(); }
+      pushWidget();
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) { wentAway = Date.now(); coverUp(); }
+    });
+
+    // Android's hardware back button. Without this it closes the whole app
+    // from anywhere, including from inside a sheet, which reads as a crash.
+    OTNative.onBack(function () {
+      var f = document.querySelector('.focus');
+      var sh = document.querySelector('.sheet');
+      if (f) { closeFocus(); return; }
+      if (sh) {
+        var x = sh.querySelector('[data-close]');
+        if (x) x.click();
+        return;
+      }
+      if (tab !== 'today') { goTab('today'); return; }
+      var A = OTNative._plug('App');
+      if (A && A.exitApp) A.exitApp();
+    });
+  }
 })();
